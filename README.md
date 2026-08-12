@@ -23,6 +23,10 @@ Currently implemented:
 * Sample code-review endpoint
 * Structured review findings
 * Review category and severity enums
+* Service layer for sample review logic
+* Constructor-based dependency injection
+* POST endpoint for submitting code-review requests
+* JSON request deserialization
 
 The current endpoint returns sample data. It is not connected to GitHub or an AI model yet.
 
@@ -42,23 +46,34 @@ On Windows:
 mvnw.cmd spring-boot:run
 ```
 
-After the application starts, open:
+After the application starts, use Postman to send a `POST` request to:
 
 ```text
-http://localhost:8080/api/reviews/test
+http://localhost:8080/api/reviews
 ```
 
-The endpoint returns a sample review finding:
+Select **Body → raw → JSON** and enter:
 
 ```json
 {
-  "filepath": "src/main/java/Review.java",
+  "filePath": "src/main/java/ReviewService.java",
+  "language": "Java",
+  "code": "public void processReview() {}"
+}
+```
+
+Example response:
+
+```json
+{
+  "filePath": "src/main/java/ReviewService.java",
   "lineNumber": 12,
   "category": "BUG",
   "severity": "HIGH",
   "message": "This value could be null."
 }
 ```
+
 
 ## Project Status
 

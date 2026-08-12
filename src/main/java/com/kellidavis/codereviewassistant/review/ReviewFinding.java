@@ -1,7 +1,7 @@
 package com.kellidavis.codereviewassistant.review;
 
 public record ReviewFinding(
-        String filepath,
+        String filePath,
         int lineNumber,
         ReviewCategory category,
         ReviewSeverity severity,
