@@ -27,6 +27,7 @@ Currently implemented:
 * Constructor-based dependency injection
 * POST endpoint for submitting code-review requests
 * JSON request deserialization
+* Input validation for code-review requests
 
 The current endpoint returns sample data. It is not connected to GitHub or an AI model yet.
 
@@ -61,6 +62,10 @@ Select **Body → raw → JSON** and enter:
   "code": "public void processReview() {}"
 }
 ```
+
+* All three request fields are required.
+* Blank fields result in 400 Bad Request.
+* Request fields have maximum sizes.
 
 Example response:
 

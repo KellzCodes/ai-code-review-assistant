@@ -1,5 +1,6 @@
 package com.kellidavis.codereviewassistant.review;
 
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -14,7 +15,7 @@ public class ReviewController {
     }
 
     @PostMapping
-    public ReviewFinding reviewCode(@RequestBody ReviewRequest request) {
+    public ReviewFinding reviewCode(@Valid @RequestBody ReviewRequest request) {
         return reviewService.reviewCode(request);
     }
 }
