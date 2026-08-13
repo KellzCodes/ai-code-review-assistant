@@ -28,6 +28,7 @@ Currently implemented:
 * POST endpoint for submitting code-review requests
 * JSON request deserialization
 * Input validation for code-review requests
+* Consistent JSON responses for validation errors
 
 The current endpoint returns sample data. It is not connected to GitHub or an AI model yet.
 
@@ -79,6 +80,32 @@ Example response:
 }
 ```
 
+## Request Validation
+
+All code-review requests must include:
+
+* `filePath`: Required, maximum 500 characters
+* `language`: Required, maximum 50 characters
+* `code`: Required, maximum 50,000 characters
+
+Missing, empty, or blank fields return a `400 Bad Request` response.
+
+## Validation Error Response
+
+Validation errors identify each invalid field and explain why the request was rejected.
+
+Example:
+
+```json
+{
+  "timestamp": "2026-08-13T16:59:41.351801800Z",
+  "status": 400,
+  "error": "Bad Request",
+  "fieldErrors": {
+    "code": "Code cannot be blank"
+  }
+}
+```
 
 ## Project Status
 
