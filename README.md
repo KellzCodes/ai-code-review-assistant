@@ -29,6 +29,7 @@ Currently implemented:
 * JSON request deserialization
 * Input validation for code-review requests
 * Consistent JSON responses for validation errors
+* Automated tests for API responses and request validation
 
 The current endpoint returns sample data. It is not connected to GitHub or an AI model yet.
 
@@ -105,6 +106,14 @@ Example:
     "code": "Code cannot be blank"
   }
 }
+```
+
+## Running the Tests
+
+Run the automated test suite on Windows:
+
+```shell
+mvnw.cmd test
 ```
 
 ## Project Status
