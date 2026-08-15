@@ -9,6 +9,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -37,13 +39,15 @@ public class ReviewControllerTest {
                 "This value could be null."
         );
 
-        when(reviewService.reviewCode(any(ReviewRequest.class))).thenReturn(finding);
+        ReviewResponse response = new ReviewResponse(List.of(finding));
+
+        when(reviewService.reviewCode(any(ReviewRequest.class))).thenReturn(response);
 
         String requestJson = """
                 {
                  "filePath": "src/main/java/ReviewService.java",
                  "language": "Java",
-                 "code": "public void processReview() {}"   
+                 "code": "public void processReview() {}"
                 }
                 """;
 
@@ -51,13 +55,15 @@ public class ReviewControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(requestJson))
                 .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.filePath")
+                .andExpect(jsonPath("$.findings").isArray())
+                .andExpect(jsonPath("$.findings.length()").value(1))
+                .andExpect(jsonPath("$.findings[0].filePath")
                         .value("src/main/java/ReviewService.java"))
-                .andExpect(jsonPath("$.lineNumber").value(12))
-                .andExpect(jsonPath("$.category").value("BUG"))
-                .andExpect(jsonPath("$.severity").value("HIGH"))
-                .andExpect(jsonPath("$.message").value("This value could be null."));
+                .andExpect(jsonPath("$.findings[0].lineNumber").value(12))
+                .andExpect(jsonPath("$.findings[0].category").value("BUG"))
+                .andExpect(jsonPath("$.findings[0].severity").value("HIGH"))
+                .andExpect(jsonPath("$.findings[0].message")
+                        .value("This value could be null."));
 
         verify(reviewService).reviewCode(any(ReviewRequest.class));
     }

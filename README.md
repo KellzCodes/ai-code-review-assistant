@@ -30,6 +30,7 @@ Currently implemented:
 * Input validation for code-review requests
 * Consistent JSON responses for validation errors
 * Automated tests for API responses and request validation
+* Support for multiple review findings in a single response
 
 The current endpoint returns sample data. It is not connected to GitHub or an AI model yet.
 

@@ -15,7 +15,7 @@ public class ReviewController {
     }
 
     @PostMapping
-    public ReviewFinding reviewCode(@Valid @RequestBody ReviewRequest request) {
+    public ReviewResponse reviewCode(@Valid @RequestBody ReviewRequest request) {
         return reviewService.reviewCode(request);
     }
 }

@@ -15,9 +15,16 @@ public class ReviewServiceTest {
                 "public void processOrder() {}"
         );
 
-        ReviewFinding finding = reviewService.reviewCode(request);
+        ReviewResponse response = reviewService.reviewCode(request);
 
-        assertThat(finding.filePath())
-                .isEqualTo("src/main/java/OrderService.java");
+        assertThat(response.findings()).hasSize(1);
+
+        ReviewFinding finding = response.findings().get(0);
+
+        assertThat(finding.filePath()).isEqualTo(request.filePath());
+        assertThat(finding.lineNumber()).isEqualTo(12);
+        assertThat(finding.category()).isEqualTo(ReviewCategory.BUG);
+        assertThat(finding.severity()).isEqualTo(ReviewSeverity.HIGH);
+        assertThat(finding.message()).isEqualTo("This value could be null.");
     }
 }
