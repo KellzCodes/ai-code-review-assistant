@@ -20,25 +20,30 @@ Currently implemented:
 
 * Spring Boot application setup
 * REST API controller
-* Sample code-review endpoint
+* Code-review endpoint
 * Structured review findings
 * Review category and severity enums
-* Service layer for sample review logic
+* Service layer for rule-based review logic
 * Constructor-based dependency injection
 * POST endpoint for submitting code-review requests
 * JSON request deserialization
 * Input validation for code-review requests
 * Consistent JSON responses for validation errors
-* Automated tests for API responses and request validation
 * Support for multiple review findings in a single response
+* Detection of `System.out.println` statements
+* Accurate line numbers for review findings
+* Support for reviews with no findings
+* Automated tests for API responses, request validation, and review logic
 
-The current endpoint returns sample data. It is not connected to GitHub or an AI model yet.
+The endpoint currently performs a small rule-based code review that detects `System.out.println` statements. It is not connected to GitHub or an AI model yet.
 
 ## Technologies
 
 * Java 21
 * Spring Boot
 * Maven
+* JUnit 5
+* Postman
 
 Additional technologies will be added as the project develops.
 
@@ -62,23 +67,31 @@ Select **Body → raw → JSON** and enter:
 {
   "filePath": "src/main/java/ReviewService.java",
   "language": "Java",
-  "code": "public void processReview() {}"
+  "code": "public class ReviewService {\n    public void processReview() {\n        System.out.println(\"Processing review\");\n    }\n}"
 }
 ```
 
-* All three request fields are required.
-* Blank fields result in 400 Bad Request.
-* Request fields have maximum sizes.
-
-Example response:
+The application detects the `System.out.println` statement and returns a maintainability finding with its line number:
 
 ```json
 {
-  "filePath": "src/main/java/ReviewService.java",
-  "lineNumber": 12,
-  "category": "BUG",
-  "severity": "HIGH",
-  "message": "This value could be null."
+  "findings": [
+    {
+      "filePath": "src/main/java/ReviewService.java",
+      "lineNumber": 3,
+      "category": "MAINTAINABILITY",
+      "severity": "LOW",
+      "message": "Avoid System.out.println in application code. Use a logger instead."
+    }
+  ]
+}
+```
+
+If the submitted code does not contain any recognized problems, the endpoint returns an empty findings list:
+
+```json
+{
+  "findings": []
 }
 ```
 
@@ -116,6 +129,15 @@ Run the automated test suite on Windows:
 ```shell
 mvnw.cmd test
 ```
+
+The tests verify:
+
+* Successful API requests and JSON responses
+* Request validation and validation error responses
+* Detection of `System.out.println` statements
+* Correct review-finding line numbers
+* Multiple findings in one response
+* Empty responses when no problems are detected
 
 ## Project Status
 
