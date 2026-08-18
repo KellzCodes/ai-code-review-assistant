@@ -1,73 +1,46 @@
 package com.kellidavis.codereviewassistant.review;
 
+import com.kellidavis.codereviewassistant.review.analysis.CodeAnalyzer;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-public class ReviewServiceTest {
-    private final ReviewService reviewService = new ReviewService();
+class ReviewServiceTest {
 
     @Test
-    void reviewCode_withSystemOutPrintln_returnsFinding(){
+    void reviewCode_returnsFindingsProducedByAnalyzer() {
+        CodeAnalyzer codeAnalyzer = mock(CodeAnalyzer.class);
+        ReviewService reviewService =
+                new ReviewService(codeAnalyzer);
+
         ReviewRequest request = new ReviewRequest(
                 "src/main/java/PaymentService.java",
                 "Java",
-                """
-                        public class PaymentService {
-                            public void processPayment() {
-                                System.out.println("Processing payment");
-                            }
-                        }
-                      """
+                "System.out.println(\"Processing payment\");"
         );
 
-        ReviewResponse response = reviewService.reviewCode(request);
-        assertThat(response.findings()).hasSize(1);
-
-        ReviewFinding finding = response.findings().get(0);
-        assertThat(finding.filePath())
-                .isEqualTo("src/main/java/PaymentService.java");
-        assertThat(finding.lineNumber()).isEqualTo(3);
-        assertThat(finding.category()).isEqualTo(ReviewCategory.MAINTAINABILITY);
-        assertThat(finding.severity()).isEqualTo(ReviewSeverity.LOW);
-        assertThat(finding.message())
-                .isEqualTo("Avoid System.out.println in application code. Use a logger instead.");
-
-    }
-
-    @Test
-    void reviewCode_withoutSystemOutPrintln_returnsEmptyFindings(){
-        ReviewRequest request = new ReviewRequest(
+        ReviewFinding expectedFinding = new ReviewFinding(
                 "src/main/java/PaymentService.java",
-                "Java",
-                """
-                       public class PaymentService {
-                            public void processPayment() {
-                                process();
-                            }
-                        }
-                      """
+                1,
+                ReviewCategory.MAINTAINABILITY,
+                ReviewSeverity.LOW,
+                "Avoid System.out.println in application code. Use a logger instead."
         );
 
-        ReviewResponse response = reviewService.reviewCode(request);
-        assertThat(response.findings()).isEmpty();
-    }
+        when(codeAnalyzer.analyze(request))
+                .thenReturn(List.of(expectedFinding));
 
-    @Test
-    void reviewCode_withMultipleSystemOutPrintlnStatements_returnsMultipleFindings(){
-        ReviewRequest request = new ReviewRequest(
-                "src/main/java/PaymentService.java",
-                "Java",
-                """
-                      public class PaymentService {
-                            System.out.println("First");
-                            System.out.println("Second");
-                      """
-        );
+        ReviewResponse response =
+                reviewService.reviewCode(request);
 
-        ReviewResponse response = reviewService.reviewCode(request);
-        assertThat(response.findings()).hasSize(2);
-        assertThat(response.findings().get(0).lineNumber()).isEqualTo(2);
-        assertThat(response.findings().get(1).lineNumber()).isEqualTo(3);
+        assertThat(response.findings())
+                .containsExactly(expectedFinding);
+
+        verify(codeAnalyzer).analyze(request);
     }
 }

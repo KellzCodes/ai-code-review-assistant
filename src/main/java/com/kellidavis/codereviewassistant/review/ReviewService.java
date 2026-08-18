@@ -1,32 +1,17 @@
 package com.kellidavis.codereviewassistant.review;
 
+import com.kellidavis.codereviewassistant.review.analysis.CodeAnalyzer;
 import org.springframework.stereotype.Service;
-
-import java.util.ArrayList;
-import java.util.List;
 
 @Service
 public class ReviewService {
+    private final CodeAnalyzer codeAnalyzer;
+
+    public ReviewService(CodeAnalyzer codeAnalyzer) {
+        this.codeAnalyzer = codeAnalyzer;
+    }
+
     public ReviewResponse reviewCode(ReviewRequest request){
-        List<ReviewFinding> findings = new ArrayList<>();
-        List<String> codeLines = request.code().lines().toList();
-
-        for(int i = 0; i < codeLines.size(); i++){
-            String line = codeLines.get(i);
-
-            if(line.contains("System.out.println")){
-                ReviewFinding finding = new ReviewFinding(
-                        request.filePath(),
-                        i + 1,
-                        ReviewCategory.MAINTAINABILITY,
-                        ReviewSeverity.LOW,
-                        "Avoid System.out.println in application code. Use a logger instead."
-                );
-
-                findings.add(finding);
-            }
-        }
-
-        return new ReviewResponse(List.copyOf(findings));
+        return new ReviewResponse(codeAnalyzer.analyze(request));
     }
 }

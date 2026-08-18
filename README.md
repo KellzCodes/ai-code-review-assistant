@@ -23,7 +23,9 @@ Currently implemented:
 * Code-review endpoint
 * Structured review findings
 * Review category and severity enums
-* Service layer for rule-based review logic
+* Service layer that coordinates code-review requests
+* Replaceable `CodeAnalyzer` interface
+* Dedicated rule-based code analyzer
 * Constructor-based dependency injection
 * POST endpoint for submitting code-review requests
 * JSON request deserialization
