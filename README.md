@@ -16,6 +16,15 @@ The completed application will:
 
 The project is in early development.
 
+## Current Review Rules
+
+| Rule | Category | Severity |
+| --- | --- | --- |
+| Use of `System.out.println` | `MAINTAINABILITY` | `LOW` |
+| Potential hardcoded password, API key, secret, or token | `SECURITY` | `HIGH` |
+
+The hardcoded-secret rule uses basic pattern matching and is not intended to replace a production security scanner.
+
 Currently implemented:
 
 * Spring Boot application setup
@@ -36,8 +45,9 @@ Currently implemented:
 * Accurate line numbers for review findings
 * Support for reviews with no findings
 * Automated tests for API responses, request validation, and review logic
+* Basic detection of potential hardcoded secrets
 
-The endpoint currently performs a small rule-based code review that detects `System.out.println` statements. It is not connected to GitHub or an AI model yet.
+The endpoint currently performs a small rule-based code review that detects `System.out.println` statements and potential hardcoded secrets. It is not connected to GitHub or an AI model yet.
 
 ## Technologies
 
@@ -140,6 +150,8 @@ The tests verify:
 * Correct review-finding line numbers
 * Multiple findings in one response
 * Empty responses when no problems are detected
+* Detection of potential hardcoded secrets
+* Exclusion of secrets loaded from environment variables
 
 ## Project Status
 
