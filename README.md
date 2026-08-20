@@ -139,7 +139,7 @@ Example:
 Run the automated test suite on Windows:
 
 ```shell
-mvnw.cmd test
+.\mvnw.cmd test
 ```
 
 The tests verify:
