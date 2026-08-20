@@ -46,6 +46,10 @@ Currently implemented:
 * Support for reviews with no findings
 * Automated tests for API responses, request validation, and review logic
 * Basic detection of potential hardcoded secrets
+* GitHub pull-request webhook endpoint
+* GitHub webhook event and delivery header handling
+* Pull-request webhook payload deserialization
+* Filtering of pull-request webhook actions
 
 The endpoint currently performs a small rule-based code review that detects `System.out.println` statements and potential hardcoded secrets. It is not connected to GitHub or an AI model yet.
 
@@ -64,7 +68,7 @@ Additional technologies will be added as the project develops.
 On Windows:
 
 ```shell
-mvnw.cmd spring-boot:run
+.\mvnw.cmd spring-boot:run
 ```
 
 After the application starts, use Postman to send a `POST` request to:
@@ -134,6 +138,14 @@ Example:
 }
 ```
 
+## GitHub Webhook Endpoint
+
+The application includes an endpoint for receiving GitHub-style pull-request webhook payloads:
+
+```text
+POST http://localhost:8080/api/github/webhooks
+```
+
 ## Running the Tests
 
 Run the automated test suite on Windows:
@@ -152,6 +164,9 @@ The tests verify:
 * Empty responses when no problems are detected
 * Detection of potential hardcoded secrets
 * Exclusion of secrets loaded from environment variables
+* GitHub webhook payload deserialization
+* GitHub event and action filtering
+* Required GitHub webhook headers
 
 ## Project Status
 
