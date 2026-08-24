@@ -1,6 +1,5 @@
 package com.kellidavis.codereviewassistant.github;
 
-import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -12,9 +11,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/github/webhooks")
 public class GitHubWebhookController {
+
+    private final GitHubWebhookSignatureVerifier signatureVerifier;
+
+    private final GitHubWebhookPayloadParser payloadParser;
+
     private final GitHubWebhookService gitHubWebhookService;
 
-    public GitHubWebhookController(GitHubWebhookService gitHubWebhookService) {
+    public GitHubWebhookController(
+            GitHubWebhookSignatureVerifier signatureVerifier,
+            GitHubWebhookPayloadParser payloadParser,
+            GitHubWebhookService gitHubWebhookService
+    ) {
+        this.signatureVerifier = signatureVerifier;
+        this.payloadParser = payloadParser;
         this.gitHubWebhookService = gitHubWebhookService;
     }
 
@@ -27,9 +37,29 @@ public class GitHubWebhookController {
             @RequestHeader("X-GitHub-Delivery")
             String deliveryId,
 
-            @Valid @RequestBody
-            GitHubPullRequestEvent event
-    ){
-        return gitHubWebhookService.handle(eventType, deliveryId, event);
+            @RequestHeader(
+                    value = "X-Hub-Signature-256",
+                    required = false
+            )
+            String providedSignature,
+
+            @RequestBody
+            byte[] rawPayload
+    ) {
+        if (!signatureVerifier.isValid(
+                rawPayload,
+                providedSignature
+        )) {
+            throw new InvalidGitHubWebhookSignatureException();
+        }
+
+        GitHubPullRequestEvent event =
+                payloadParser.parse(rawPayload);
+
+        return gitHubWebhookService.handle(
+                eventType,
+                deliveryId,
+                event
+        );
     }
 }

@@ -50,6 +50,10 @@ Currently implemented:
 * GitHub webhook event and delivery header handling
 * Pull-request webhook payload deserialization
 * Filtering of pull-request webhook actions
+* HMAC-SHA256 validation of GitHub webhook signatures
+* Rejection of missing or invalid webhook signatures
+* Environment-based webhook-secret configuration
+* Raw webhook payload validation before deserialization
 
 The endpoint currently performs a small rule-based code review that detects `System.out.println` statements and potential hardcoded secrets. It is not connected to GitHub or an AI model yet.
 
@@ -146,6 +150,18 @@ The application includes an endpoint for receiving GitHub-style pull-request web
 POST http://localhost:8080/api/github/webhooks
 ```
 
+### Webhook Signature Verification
+
+GitHub webhook requests must include a valid `X-Hub-Signature-256` header. The application calculates an HMAC-SHA256 signature from the unmodified request body and compares it with the signature supplied by GitHub.
+
+The webhook secret is read from the `GITHUB_WEBHOOK_SECRET` environment variable and must never be committed to the repository.
+
+To set a local webhook secret in PowerShell:
+
+```powershell
+$env:GITHUB_WEBHOOK_SECRET = "your-local-secret"
+```
+
 ## Running the Tests
 
 Run the automated test suite on Windows:
@@ -153,6 +169,14 @@ Run the automated test suite on Windows:
 ```shell
 .\mvnw.cmd test
 ```
+
+Start the application from the same PowerShell session:
+
+```shell
+.\mvnw.cmd spring-boot:run
+```
+
+Missing or invalid signatures return 401 Unauthorized.
 
 The tests verify:
 
@@ -167,6 +191,9 @@ The tests verify:
 * GitHub webhook payload deserialization
 * GitHub event and action filtering
 * Required GitHub webhook headers
+* Valid and invalid GitHub webhook signatures
+* Rejection of modified webhook payloads
+* Webhook JSON parsing after signature verification
 
 ## Project Status
 
