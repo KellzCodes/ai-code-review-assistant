@@ -1,6 +1,10 @@
 package com.kellidavis.codereviewassistant.error;
 
+import com.kellidavis.codereviewassistant.github.GitHubApiException;
 import com.kellidavis.codereviewassistant.github.GitHubWebhookErrorResponse;
+import com.kellidavis.codereviewassistant.github.InvalidGitHubWebhookPayloadException;
+import com.kellidavis.codereviewassistant.github.InvalidGitHubWebhookSignatureException;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -10,23 +14,17 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.time.Instant;
 import java.util.Map;
 import java.util.stream.Collectors;
-import com.kellidavis.codereviewassistant.github.InvalidGitHubWebhookPayloadException;
-import com.kellidavis.codereviewassistant.github.InvalidGitHubWebhookSignatureException;
-import jakarta.validation.ConstraintViolationException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ValidationErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
-        // Collects every invalid field into a Map.
-        // If a single field violates multiple constraints, messages are concatenated with a semicolon
         Map<String, String> errors = ex.getBindingResult().getFieldErrors().stream()
                 .collect(Collectors.toMap(
                         FieldError::getField,
                         error -> error.getDefaultMessage() != null ? error.getDefaultMessage() : "Invalid value",
-                        (existingMessage, newMessage) -> existingMessage + "; " + newMessage
-
-                ));
+                        (existingMessage, newMessage) -> existingMessage + "; " + newMessage));
 
         ValidationErrorResponse response = new ValidationErrorResponse(
                 Instant.now(),
@@ -35,11 +33,13 @@ public class GlobalExceptionHandler {
                 errors
         );
 
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
     @ExceptionHandler(InvalidGitHubWebhookSignatureException.class)
-    public ResponseEntity<ApiErrorResponse> handleInvalidGitHubWebhookSignature(InvalidGitHubWebhookSignatureException ex) {
+    public ResponseEntity<ApiErrorResponse> handleInvalidGitHubWebhookSignature(
+            InvalidGitHubWebhookSignatureException ex
+    ) {
         ApiErrorResponse response = new ApiErrorResponse(
                 Instant.now(),
                 HttpStatus.UNAUTHORIZED.value(),
@@ -56,7 +56,8 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.toMap(
                         violation -> violation.getPropertyPath().toString(),
                         violation -> violation.getMessage(),
-                        (existingMessage, incomingMessage) -> existingMessage + "; " + incomingMessage
+                        (existingMessage, incomingMessage) ->
+                                existingMessage + "; " + incomingMessage
                 ));
 
         ValidationErrorResponse response = new ValidationErrorResponse(
@@ -69,20 +70,31 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
-    @ExceptionHandler(
-            InvalidGitHubWebhookPayloadException.class
-    )
+    @ExceptionHandler(InvalidGitHubWebhookPayloadException.class)
     public ResponseEntity<GitHubWebhookErrorResponse> handleInvalidGitHubWebhookPayload(
-            InvalidGitHubWebhookPayloadException e
+            InvalidGitHubWebhookPayloadException ex
     ) {
-        GitHubWebhookErrorResponse response =
-                new GitHubWebhookErrorResponse(
-                        Instant.now(),
-                        HttpStatus.BAD_REQUEST.value(),
-                        "Bad Request",
-                        e.getMessage()
-                );
+        GitHubWebhookErrorResponse response = new GitHubWebhookErrorResponse(
+                Instant.now(),
+                HttpStatus.BAD_REQUEST.value(),
+                "Bad Request",
+                ex.getMessage()
+        );
 
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    @ExceptionHandler(GitHubApiException.class)
+    public ResponseEntity<GitHubWebhookErrorResponse> handleGitHubApiException(
+            GitHubApiException ex
+    ) {
+        GitHubWebhookErrorResponse response = new GitHubWebhookErrorResponse(
+                Instant.now(),
+                HttpStatus.BAD_GATEWAY.value(),
+                "Bad Gateway",
+                ex.getMessage()
+        );
+
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(response);
     }
 }

@@ -1,4 +1,4 @@
-# AI-Powered Code Review Assistant
+# AI Powered Code Review Assistant
 
 An in-progress portfolio project that will review GitHub pull requests and provide context-aware code review suggestions.
 
@@ -6,15 +6,29 @@ An in-progress portfolio project that will review GitHub pull requests and provi
 
 The completed application will:
 
-* Receive pull-request events from GitHub
-* Analyze changed code using an AI model
-* Identify potential bugs, security concerns, and maintainability problems
-* Post review suggestions on the pull request
-* Track review results and code-quality metrics
+- Receive pull request events from GitHub
+- Retrieve changed files from pull requests
+- Analyze changed code using AI and rule-based review logic
+- Identify bugs, security issues, and maintainability problems
+- Post review suggestions back to pull requests
+- Track review activity and code quality metrics over time
 
 ## Current Status
 
 The project is in early development.
+
+The application currently has two working areas:
+
+1. A REST API for submitting code review requests directly
+2. A GitHub webhook pipeline that validates pull request events and retrieves changed pull request files from GitHub
+
+The application does not yet:
+
+- analyze GitHub pull request files automatically
+- post review comments back to GitHub
+- use a fine-tuned AI model
+- store review history or metrics
+- support version control systems beyond GitHub
 
 ## Current Review Rules
 
@@ -25,64 +39,83 @@ The project is in early development.
 
 The hardcoded-secret rule uses basic pattern matching and is not intended to replace a production security scanner.
 
-Currently implemented:
+## Implemented So Far
 
-* Spring Boot application setup
-* REST API controller
-* Code-review endpoint
-* Structured review findings
-* Review category and severity enums
-* Service layer that coordinates code-review requests
-* Replaceable `CodeAnalyzer` interface
-* Dedicated rule-based code analyzer
-* Constructor-based dependency injection
-* POST endpoint for submitting code-review requests
-* JSON request deserialization
-* Input validation for code-review requests
-* Consistent JSON responses for validation errors
-* Support for multiple review findings in a single response
-* Detection of `System.out.println` statements
-* Accurate line numbers for review findings
-* Support for reviews with no findings
-* Automated tests for API responses, request validation, and review logic
-* Basic detection of potential hardcoded secrets
-* GitHub pull-request webhook endpoint
-* GitHub webhook event and delivery header handling
-* Pull-request webhook payload deserialization
-* Filtering of pull-request webhook actions
-* HMAC-SHA256 validation of GitHub webhook signatures
-* Rejection of missing or invalid webhook signatures
-* Environment-based webhook-secret configuration
-* Raw webhook payload validation before deserialization
-* Graceful error handling for malformed GitHub webhook payloads
-
-The endpoint currently performs a small rule-based code review that detects `System.out.println` statements and potential hardcoded secrets. It is not connected to GitHub or an AI model yet.
+- Spring Boot application setup
+- REST API controller for code review requests
+- Request validation for code review input
+- Validation error responses
+- Support for multiple review findings
+- Rule-based code analysis
+- Detection of `System.out.println`
+- Detection of potential hardcoded secrets
+- Accurate line number reporting
+- Replaceable `CodeAnalyzer` abstraction
+- GitHub pull request webhook endpoint
+- GitHub webhook event and delivery header handling
+- HMAC-SHA256 webhook signature verification
+- Graceful handling of malformed webhook payloads
+- Pull request webhook payload validation
+- Retrieval of changed pull request files from GitHub for supported webhook events
+- Automated tests for API, webhook, validation, and analysis behavior
 
 ## Technologies
 
-* Java 21
-* Spring Boot
-* Maven
-* JUnit 5
-* Postman
+- Java 21
+- Spring Boot
+- Maven
+- JUnit 5
+- Mockito
+- AssertJ
 
-Additional technologies will be added as the project develops.
+## Configuration
+
+The application uses environment variables for secrets and GitHub API access.
+
+### Required Environment Variables
+
+- `GITHUB_WEBHOOK_SECRET`
+  - Used to verify the `X-Hub-Signature-256` webhook signature from GitHub
+- `GITHUB_API_TOKEN`
+  - Used to authenticate GitHub API requests when retrieving changed pull request files
+
+### Optional Environment Variables
+
+- `GITHUB_API_BASE_URL`
+  - Defaults to `https://api.github.com`
+  - Useful for testing against GitHub Enterprise or a mock server
+
+### Example PowerShell Setup
+
+```powershell
+$env:GITHUB_WEBHOOK_SECRET = "your-webhook-secret"
+$env:GITHUB_API_TOKEN = "your-github-token"
+$env:GITHUB_API_BASE_URL = "https://api.github.com"
+```
 
 ## Running the Application
 
 On Windows:
 
-```shell
+```powershell
 .\mvnw.cmd spring-boot:run
 ```
 
-After the application starts, use Postman to send a `POST` request to:
+The application starts on:
 
 ```text
-http://localhost:8080/api/reviews
+http://localhost:8080
 ```
 
-Select **Body → raw → JSON** and enter:
+## Code Review API
+
+Submit code for manual review with:
+
+```text
+POST http://localhost:8080/api/reviews
+```
+
+Example request body:
 
 ```json
 {
@@ -92,7 +125,7 @@ Select **Body → raw → JSON** and enter:
 }
 ```
 
-The application detects the `System.out.println` statement and returns a maintainability finding with its line number:
+Example response:
 
 ```json
 {
@@ -108,7 +141,7 @@ The application detects the `System.out.println` statement and returns a maintai
 }
 ```
 
-If the submitted code does not contain any recognized problems, the endpoint returns an empty findings list:
+If the submitted code contains no recognized issues, the API returns:
 
 ```json
 {
@@ -118,23 +151,19 @@ If the submitted code does not contain any recognized problems, the endpoint ret
 
 ## Request Validation
 
-All code-review requests must include:
+All code review requests must include:
 
-* `filePath`: Required, maximum 500 characters
-* `language`: Required, maximum 50 characters
-* `code`: Required, maximum 50,000 characters
+- `filePath`: required, maximum 500 characters
+- `language`: required, maximum 50 characters
+- `code`: required, maximum 50,000 characters
 
-Missing, empty, or blank fields return a `400 Bad Request` response.
+Missing, blank, or oversized values return `400 Bad Request`.
 
-## Validation Error Response
-
-Validation errors identify each invalid field and explain why the request was rejected.
-
-Example:
+Example validation error response:
 
 ```json
 {
-  "timestamp": "2026-08-13T16:59:41.351801800Z",
+  "timestamp": "2026-08-25T16:00:00Z",
   "status": 400,
   "error": "Bad Request",
   "fieldErrors": {
@@ -143,61 +172,79 @@ Example:
 }
 ```
 
-## GitHub Webhook Endpoint
+## GitHub Webhook API
 
-The application includes an endpoint for receiving GitHub-style pull-request webhook payloads:
+Receive GitHub pull request webhooks at:
 
 ```text
 POST http://localhost:8080/api/github/webhooks
 ```
 
-### Webhook Signature Verification
+### Supported Webhook Flow
 
-GitHub webhook requests must include a valid `X-Hub-Signature-256` header. The application calculates an HMAC-SHA256 signature from the unmodified request body and compares it with the signature supplied by GitHub.
+For supported GitHub webhook events, the application currently does the following:
 
-The webhook secret is read from the `GITHUB_WEBHOOK_SECRET` environment variable and must never be committed to the repository.
+1. Verifies the `X-Hub-Signature-256` header
+2. Parses and validates the webhook payload
+3. Accepts supported `pull_request` actions:
+   - `opened`
+   - `reopened`
+   - `synchronize`
+4. Calls the GitHub API to retrieve the changed files in that pull request
+5. Returns an accepted response describing the result
 
-To set a local webhook secret in PowerShell:
+### Example Accepted Response
 
-```powershell
-$env:GITHUB_WEBHOOK_SECRET = "your-local-secret"
+```json
+{
+  "status": "ACCEPTED",
+  "deliveryId": "delivery-123",
+  "eventType": "pull_request",
+  "action": "opened",
+  "repository": "kellidavis/ai-code-review-assistant",
+  "pullRequestNumber": 42,
+  "message": "Pull request event accepted and 2 changed file(s) were retrieved from GitHub."
+}
 ```
+
+### Example Ignored Response
+
+Unsupported event types or pull request actions are ignored safely.
+
+```json
+{
+  "status": "IGNORED",
+  "deliveryId": "delivery-456",
+  "eventType": "push",
+  "action": "opened",
+  "repository": "kellidavis/ai-code-review-assistant",
+  "pullRequestNumber": 42,
+  "message": "Webhook event type is not supported."
+}
+```
+
+## Webhook Error Handling
+
+### Invalid or Missing Signature
+
+Returns `401 Unauthorized`.
+
+### Malformed JSON Payload
+
+Returns `400 Bad Request`.
+
+### GitHub API Failure
+
+If the webhook is valid but the application cannot retrieve pull request files from GitHub, it returns `502 Bad Gateway` with a structured JSON error response.
 
 ## Running the Tests
 
-Run the automated test suite on Windows:
+Run the full test suite on Windows:
 
-```shell
-.\mvnw.cmd test
+```powershell
+.\mvnw.cmd clean test
 ```
-
-Start the application from the same PowerShell session:
-
-```shell
-.\mvnw.cmd spring-boot:run
-```
-
-Missing or invalid signatures return 401 Unauthorized.
-
-Malformed webhook JSON with a valid signature returns a `400 Bad Request` response.
-
-The tests verify:
-
-* Successful API requests and JSON responses
-* Request validation and validation error responses
-* Detection of `System.out.println` statements
-* Correct review-finding line numbers
-* Multiple findings in one response
-* Empty responses when no problems are detected
-* Detection of potential hardcoded secrets
-* Exclusion of secrets loaded from environment variables
-* GitHub webhook payload deserialization
-* GitHub event and action filtering
-* Required GitHub webhook headers
-* Valid and invalid GitHub webhook signatures
-* Rejection of modified webhook payloads
-* Webhook JSON parsing after signature verification
 
 ## Project Status
 
-This project is actively being developed as part of my software engineering portfolio.
+This project is actively being developed as part of a software engineering portfolio. The current focus is building the GitHub integration incrementally before adding full AI-powered pull request review behavior.

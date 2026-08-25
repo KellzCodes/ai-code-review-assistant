@@ -1,18 +1,28 @@
 package com.kellidavis.codereviewassistant.github;
 
 import org.springframework.stereotype.Service;
+
 import java.util.Set;
 
 @Service
 public class GitHubWebhookService {
+
+    private static final String PULL_REQUEST_EVENT_TYPE = "pull_request";
+
     private static final Set<String> REVIEW_ACTIONS = Set.of(
             "opened",
             "reopened",
             "synchronize"
     );
 
-    public GitHubWebhookResponse handle(String eventType, String deliveryId, GitHubPullRequestEvent event){
-        if(!"pull_request".equals(eventType)){
+    private final GitHubPullRequestFilesClient gitHubPullRequestFilesClient;
+
+    public GitHubWebhookService(GitHubPullRequestFilesClient gitHubPullRequestFilesClient) {
+        this.gitHubPullRequestFilesClient = gitHubPullRequestFilesClient;
+    }
+
+    public GitHubWebhookResponse handle(String eventType, String deliveryId, GitHubPullRequestEvent event) {
+        if (!PULL_REQUEST_EVENT_TYPE.equals(eventType)) {
             return new GitHubWebhookResponse(
                     "IGNORED",
                     deliveryId,
@@ -24,7 +34,7 @@ public class GitHubWebhookService {
             );
         }
 
-        if(!REVIEW_ACTIONS.contains(event.action())){
+        if (!REVIEW_ACTIONS.contains(event.action())) {
             return new GitHubWebhookResponse(
                     "IGNORED",
                     deliveryId,
@@ -36,6 +46,9 @@ public class GitHubWebhookService {
             );
         }
 
+        int changedFileCount = gitHubPullRequestFilesClient.fetchPullRequestFiles(event.repository().fullName(),
+                event.number()).size();
+
         return new GitHubWebhookResponse(
                 "ACCEPTED",
                 deliveryId,
@@ -43,7 +56,9 @@ public class GitHubWebhookService {
                 event.action(),
                 event.repository().fullName(),
                 event.number(),
-                "Pull request event accepted for future review processing."
+                "Pull request event accepted and "
+                        + changedFileCount
+                        + " changed file(s) were retrieved from GitHub."
         );
     }
 }
