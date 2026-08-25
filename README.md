@@ -54,6 +54,7 @@ Currently implemented:
 * Rejection of missing or invalid webhook signatures
 * Environment-based webhook-secret configuration
 * Raw webhook payload validation before deserialization
+* Graceful error handling for malformed GitHub webhook payloads
 
 The endpoint currently performs a small rule-based code review that detects `System.out.println` statements and potential hardcoded secrets. It is not connected to GitHub or an AI model yet.
 
@@ -177,6 +178,8 @@ Start the application from the same PowerShell session:
 ```
 
 Missing or invalid signatures return 401 Unauthorized.
+
+Malformed webhook JSON with a valid signature returns a `400 Bad Request` response.
 
 The tests verify:
 

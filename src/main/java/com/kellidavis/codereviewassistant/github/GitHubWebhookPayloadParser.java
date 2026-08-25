@@ -24,7 +24,7 @@ public class GitHubWebhookPayloadParser {
         try{
             event = jsonMapper.readValue(payload, GitHubPullRequestEvent.class);
         }catch(JacksonException e){
-            throw new InvalidGitHubWebhookPayloadException("Webhook payload must contain valid JSON.");
+            throw new InvalidGitHubWebhookPayloadException("Webhook payload must contain valid JSON.", e);
         }
 
         Set<ConstraintViolation<GitHubPullRequestEvent>> violations = validator.validate(event);

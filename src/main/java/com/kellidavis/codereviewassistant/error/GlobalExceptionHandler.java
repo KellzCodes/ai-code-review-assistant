@@ -1,5 +1,6 @@
 package com.kellidavis.codereviewassistant.error;
 
+import com.kellidavis.codereviewassistant.github.GitHubWebhookErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -66,5 +67,22 @@ public class GlobalExceptionHandler {
         );
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    @ExceptionHandler(
+            InvalidGitHubWebhookPayloadException.class
+    )
+    public ResponseEntity<GitHubWebhookErrorResponse> handleInvalidGitHubWebhookPayload(
+            InvalidGitHubWebhookPayloadException e
+    ) {
+        GitHubWebhookErrorResponse response =
+                new GitHubWebhookErrorResponse(
+                        Instant.now(),
+                        HttpStatus.BAD_REQUEST.value(),
+                        "Bad Request",
+                        e.getMessage()
+                );
+
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 }

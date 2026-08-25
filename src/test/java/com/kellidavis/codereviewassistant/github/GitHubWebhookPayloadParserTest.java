@@ -4,6 +4,7 @@ import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import org.junit.jupiter.api.Test;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.nio.charset.StandardCharsets;
@@ -15,8 +16,11 @@ class GitHubWebhookPayloadParserTest {
 
     private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
-    private final GitHubWebhookPayloadParser payloadParser = new GitHubWebhookPayloadParser(
-            JsonMapper.builder().build(), validator);
+    private final GitHubWebhookPayloadParser payloadParser =
+            new GitHubWebhookPayloadParser(
+                    JsonMapper.builder().build(),
+                    validator
+            );
 
     @Test
     void parse_withValidPayload_returnsEvent() {
@@ -25,49 +29,32 @@ class GitHubWebhookPayloadParserTest {
         GitHubPullRequestEvent event = payloadParser.parse(payload);
 
         assertThat(event.action()).isEqualTo("opened");
+
         assertThat(event.number()).isEqualTo(42);
+
         assertThat(event.pullRequest().title()).isEqualTo("Add payment validation");
+
         assertThat(event.pullRequest().htmlUrl())
-                .isEqualTo(
-                        "https://github.com/kellidavis/"
-                                + "ai-code-review-assistant/"
-                                + "pull/42"
-                );
-        assertThat(event.repository().fullName())
-                .isEqualTo(
-                        "kellidavis/ai-code-review-assistant"
-                );
+                .isEqualTo("https://github.com/kellidavis/ai-code-review-assistant/pull/42");
+
+        assertThat(event.repository().fullName()).isEqualTo("kellidavis/ai-code-review-assistant");
     }
 
     @Test
     void parse_withBlankAction_throwsConstraintViolation() {
-        String payload = validPayload()
-                .replace("\"action\": \"opened\"", "\"action\": \"\"");
+        String payload = validPayload().replace("\"action\": \"opened\"", "\"action\": \"\"");
 
-        assertThatThrownBy(() ->
-                payloadParser.parse(
-                        payload.getBytes(
-                                StandardCharsets.UTF_8
-                        )
-                )
-        ).isInstanceOf(
-                ConstraintViolationException.class
-        );
+        assertThatThrownBy(() -> payloadParser.parse(payload.getBytes(StandardCharsets.UTF_8)))
+                .isInstanceOf(ConstraintViolationException.class);
     }
 
     @Test
     void parse_withMalformedJson_throwsPayloadException() {
         byte[] payload = "{not valid JSON}".getBytes(StandardCharsets.UTF_8);
 
-        assertThatThrownBy(() ->
-                payloadParser.parse(payload)
-        )
-                .isInstanceOf(
-                        InvalidGitHubWebhookPayloadException.class
-                )
-                .hasMessage(
-                        "Webhook payload must contain valid JSON."
-                );
+        assertThatThrownBy(() -> payloadParser.parse(payload))
+                .isInstanceOf(InvalidGitHubWebhookPayloadException.class).hasMessage(
+                        "Webhook payload must contain valid JSON.").hasCauseInstanceOf(JacksonException.class);
     }
 
     private String validPayload() {
