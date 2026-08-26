@@ -1,64 +1,83 @@
 package com.kellidavis.codereviewassistant.github;
 
 import org.springframework.stereotype.Service;
-
 import java.util.Set;
 
 @Service
 public class GitHubWebhookService {
 
     private static final String PULL_REQUEST_EVENT_TYPE = "pull_request";
+    private static final String IGNORED_STATUS = "IGNORED";
+    private static final String ACCEPTED_STATUS = "ACCEPTED";
 
     private static final Set<String> REVIEW_ACTIONS = Set.of(
             "opened",
             "reopened",
-            "synchronize"
-    );
+            "synchronize");
 
     private final GitHubPullRequestFilesClient gitHubPullRequestFilesClient;
+    private final GitHubPullRequestFilesPreparer gitHubPullRequestFilesPreparer;
 
-    public GitHubWebhookService(GitHubPullRequestFilesClient gitHubPullRequestFilesClient) {
+    public GitHubWebhookService(
+            GitHubPullRequestFilesClient gitHubPullRequestFilesClient,
+            GitHubPullRequestFilesPreparer gitHubPullRequestFilesPreparer
+    ) {
         this.gitHubPullRequestFilesClient = gitHubPullRequestFilesClient;
+        this.gitHubPullRequestFilesPreparer = gitHubPullRequestFilesPreparer;
     }
 
     public GitHubWebhookResponse handle(String eventType, String deliveryId, GitHubPullRequestEvent event) {
         if (!PULL_REQUEST_EVENT_TYPE.equals(eventType)) {
             return new GitHubWebhookResponse(
-                    "IGNORED",
+                    IGNORED_STATUS,
                     deliveryId,
                     eventType,
                     event.action(),
                     event.repository().fullName(),
                     event.number(),
+                    0,
+                    0,
+                    0,
                     "Webhook event type is not supported."
             );
         }
 
         if (!REVIEW_ACTIONS.contains(event.action())) {
             return new GitHubWebhookResponse(
-                    "IGNORED",
+                    IGNORED_STATUS,
                     deliveryId,
                     eventType,
                     event.action(),
                     event.repository().fullName(),
                     event.number(),
-                    "Pull request action does not require a code review."
-            );
+                    0,
+                    0,
+                    0,
+                    "Pull request action does not require a code review.");
         }
 
-        int changedFileCount = gitHubPullRequestFilesClient.fetchPullRequestFiles(event.repository().fullName(),
-                event.number()).size();
+        PullRequestFilePreparationResult preparationResult =
+                gitHubPullRequestFilesPreparer.prepareFiles(
+                        gitHubPullRequestFilesClient.fetchPullRequestFiles(
+                                event.repository().fullName(),
+                                event.number()));
 
         return new GitHubWebhookResponse(
-                "ACCEPTED",
+                ACCEPTED_STATUS,
                 deliveryId,
                 eventType,
                 event.action(),
                 event.repository().fullName(),
                 event.number(),
+                preparationResult.totalChangedFiles(),
+                preparationResult.preparedFiles().size(),
+                preparationResult.skippedFiles(),
                 "Pull request event accepted and "
-                        + changedFileCount
-                        + " changed file(s) were retrieved from GitHub."
-        );
+                        + preparationResult.preparedFiles().size()
+                        + " reviewable file(s) were prepared from "
+                        + preparationResult.totalChangedFiles()
+                        + " changed file(s). "
+                        + preparationResult.skippedFiles()
+                        + " file(s) were skipped.");
     }
 }

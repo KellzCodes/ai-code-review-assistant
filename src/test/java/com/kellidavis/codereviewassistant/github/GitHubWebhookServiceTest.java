@@ -11,8 +11,13 @@ import static org.mockito.Mockito.when;
 class GitHubWebhookServiceTest {
 
     private final GitHubPullRequestFilesClient gitHubPullRequestFilesClient = mock(GitHubPullRequestFilesClient.class);
+    private final PullRequestFileLanguageResolver pullRequestFileLanguageResolver = new PullRequestFileLanguageResolver();
+    private final GitHubPullRequestFilesPreparer gitHubPullRequestFilesPreparer =
+            new GitHubPullRequestFilesPreparer(pullRequestFileLanguageResolver);
 
-    private final GitHubWebhookService gitHubWebhookService = new GitHubWebhookService(gitHubPullRequestFilesClient);
+    private final GitHubWebhookService gitHubWebhookService = new GitHubWebhookService(
+            gitHubPullRequestFilesClient,
+            gitHubPullRequestFilesPreparer);
 
     @Test
     void handle_withOpenedPullRequest_returnsAcceptedResponseAndFetchesFiles() {
@@ -26,8 +31,7 @@ class GitHubWebhookServiceTest {
                         3,
                         1,
                         4,
-                        null
-                ),
+                        null),
                 new GitHubPullRequestFileResponse(
                         "src/main/java/OrderService.java",
                         "added",
@@ -35,9 +39,15 @@ class GitHubWebhookServiceTest {
                         8,
                         0,
                         8,
-                        null
-                )
-        );
+                        null),
+                new GitHubPullRequestFileResponse(
+                        "docs/legacy-notes.txt",
+                        "removed",
+                        null,
+                        0,
+                        12,
+                        12,
+                        null));
 
         when(gitHubPullRequestFilesClient.fetchPullRequestFiles("kellidavis/ai-code-review-assistant",
                 42)).thenReturn(changedFiles);
@@ -51,8 +61,11 @@ class GitHubWebhookServiceTest {
         assertThat(response.action()).isEqualTo("opened");
         assertThat(response.repository()).isEqualTo("kellidavis/ai-code-review-assistant");
         assertThat(response.pullRequestNumber()).isEqualTo(42);
+        assertThat(response.totalChangedFiles()).isEqualTo(3);
+        assertThat(response.preparedFiles()).isEqualTo(2);
+        assertThat(response.skippedFiles()).isEqualTo(1);
         assertThat(response.message()).isEqualTo(
-                        "Pull request event accepted and 2 changed file(s) were retrieved from GitHub.");
+                "Pull request event accepted and 2 reviewable file(s) were prepared from 3 changed file(s). 1 file(s) were skipped.");
 
         verify(gitHubPullRequestFilesClient).fetchPullRequestFiles("kellidavis/ai-code-review-assistant",
                 42);
@@ -67,6 +80,9 @@ class GitHubWebhookServiceTest {
 
         assertThat(response.status()).isEqualTo("IGNORED");
         assertThat(response.action()).isEqualTo("closed");
+        assertThat(response.totalChangedFiles()).isZero();
+        assertThat(response.preparedFiles()).isZero();
+        assertThat(response.skippedFiles()).isZero();
         assertThat(response.message()).isEqualTo("Pull request action does not require a code review.");
 
         verifyNoInteractions(gitHubPullRequestFilesClient);
@@ -80,6 +96,9 @@ class GitHubWebhookServiceTest {
 
         assertThat(response.status()).isEqualTo("IGNORED");
         assertThat(response.eventType()).isEqualTo("push");
+        assertThat(response.totalChangedFiles()).isZero();
+        assertThat(response.preparedFiles()).isZero();
+        assertThat(response.skippedFiles()).isZero();
         assertThat(response.message()).isEqualTo("Webhook event type is not supported.");
 
         verifyNoInteractions(gitHubPullRequestFilesClient);

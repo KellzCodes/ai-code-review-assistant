@@ -7,6 +7,9 @@ public record GitHubWebhookResponse(
         String action,
         String repository,
         int pullRequestNumber,
+        int totalChangedFiles,
+        int preparedFiles,
+        int skippedFiles,
         String message
 ) {
 }

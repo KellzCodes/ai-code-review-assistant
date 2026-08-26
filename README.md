@@ -20,11 +20,11 @@ The project is in early development.
 The application currently has two working areas:
 
 1. A REST API for submitting code review requests directly
-2. A GitHub webhook pipeline that validates pull request events and retrieves changed pull request files from GitHub
+2. A GitHub webhook pipeline that validates pull request events, retrieves changed pull request files from GitHub, and prepares reviewable files for later analysis
 
 The application does not yet:
 
-- analyze GitHub pull request files automatically
+- run AI-powered review analysis on GitHub pull request files automatically
 - post review comments back to GitHub
 - use a fine-tuned AI model
 - store review history or metrics
@@ -57,6 +57,7 @@ The hardcoded-secret rule uses basic pattern matching and is not intended to rep
 - Graceful handling of malformed webhook payloads
 - Pull request webhook payload validation
 - Retrieval of changed pull request files from GitHub for supported webhook events
+- Preparation of reviewable pull request files by filtering skipped files and resolving languages
 - Automated tests for API, webhook, validation, and analysis behavior
 
 ## Technologies
@@ -191,7 +192,27 @@ For supported GitHub webhook events, the application currently does the followin
    - `reopened`
    - `synchronize`
 4. Calls the GitHub API to retrieve the changed files in that pull request
-5. Returns an accepted response describing the result
+5. Prepares reviewable files by:
+   - keeping files that include patch content
+   - skipping removed files
+   - skipping files with missing or blank patch data
+   - inferring the programming language from the file extension when possible
+6. Returns an accepted response describing how many files were retrieved, prepared, and skipped
+
+### Pull Request File Preparation
+
+The current webhook pipeline now transforms GitHub file responses into an internal review-ready shape before any future AI analysis is added.
+
+Each prepared file currently includes:
+
+- file path
+- inferred language
+- GitHub change status
+- patch text
+- additions count
+- deletions count
+
+This stage is intentionally incremental. It does not yet analyze the prepared files or generate GitHub review comments, but it creates the clean handoff point for that next step.
 
 ### Example Accepted Response
 
@@ -203,7 +224,10 @@ For supported GitHub webhook events, the application currently does the followin
   "action": "opened",
   "repository": "kellidavis/ai-code-review-assistant",
   "pullRequestNumber": 42,
-  "message": "Pull request event accepted and 2 changed file(s) were retrieved from GitHub."
+  "totalChangedFiles": 3,
+  "preparedFiles": 2,
+  "skippedFiles": 1,
+  "message": "Pull request event accepted and 2 reviewable file(s) were prepared from 3 changed file(s). 1 file(s) were skipped."
 }
 ```
 
@@ -219,6 +243,9 @@ Unsupported event types or pull request actions are ignored safely.
   "action": "opened",
   "repository": "kellidavis/ai-code-review-assistant",
   "pullRequestNumber": 42,
+  "totalChangedFiles": 0,
+  "preparedFiles": 0,
+  "skippedFiles": 0,
   "message": "Webhook event type is not supported."
 }
 ```

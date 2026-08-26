@@ -21,7 +21,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(GitHubWebhookController.class)
 @Import(GlobalExceptionHandler.class)
 class GitHubWebhookControllerTest {
-
     private static final String PAYLOAD = """
             {
               "action": "opened",
@@ -77,7 +76,10 @@ class GitHubWebhookControllerTest {
                 "opened",
                 "kellidavis/ai-code-review-assistant",
                 42,
-                "Pull request event accepted and 2 changed file(s) were retrieved from GitHub."
+                3,
+                2,
+                1,
+                "Pull request event accepted and 2 reviewable file(s) were prepared from 3 changed file(s). 1 file(s) were skipped."
         );
 
         when(signatureVerifier.isValid(any(byte[].class), eq("sha256=valid"))).thenReturn(true);
@@ -98,8 +100,11 @@ class GitHubWebhookControllerTest {
                 .andExpect(jsonPath("$.action").value("opened"))
                 .andExpect(jsonPath("$.repository").value("kellidavis/ai-code-review-assistant"))
                 .andExpect(jsonPath("$.pullRequestNumber").value(42))
+                .andExpect(jsonPath("$.totalChangedFiles").value(3))
+                .andExpect(jsonPath("$.preparedFiles").value(2))
+                .andExpect(jsonPath("$.skippedFiles").value(1))
                 .andExpect(jsonPath("$.message")
-                        .value("Pull request event accepted and 2 changed file(s) were retrieved from GitHub."));
+                        .value("Pull request event accepted and 2 reviewable file(s) were prepared from 3 changed file(s). 1 file(s) were skipped."));
 
         verify(payloadParser).parse(any(byte[].class));
         verify(gitHubWebhookService).handle("pull_request", "delivery-123", event);
