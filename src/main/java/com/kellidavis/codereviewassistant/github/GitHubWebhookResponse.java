@@ -10,6 +10,8 @@ public record GitHubWebhookResponse(
         int totalChangedFiles,
         int preparedFiles,
         int skippedFiles,
+        int reviewedFiles,
+        int totalFindings,
         String message
 ) {
 }

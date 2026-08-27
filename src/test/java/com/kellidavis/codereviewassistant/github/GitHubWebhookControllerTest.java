@@ -79,8 +79,9 @@ class GitHubWebhookControllerTest {
                 3,
                 2,
                 1,
-                "Pull request event accepted and 2 reviewable file(s) were prepared from 3 changed file(s). 1 file(s) were skipped."
-        );
+                2,
+                2,
+                "Pull request event accepted and 2 file(s) were prepared from 3 changed file(s). 1 file(s) were skipped. 2 file(s) were analyzed and 2 review finding(s) were generated.");
 
         when(signatureVerifier.isValid(any(byte[].class), eq("sha256=valid"))).thenReturn(true);
 
@@ -103,8 +104,10 @@ class GitHubWebhookControllerTest {
                 .andExpect(jsonPath("$.totalChangedFiles").value(3))
                 .andExpect(jsonPath("$.preparedFiles").value(2))
                 .andExpect(jsonPath("$.skippedFiles").value(1))
+                .andExpect(jsonPath("$.reviewedFiles").value(2))
+                .andExpect(jsonPath("$.totalFindings").value(2))
                 .andExpect(jsonPath("$.message")
-                        .value("Pull request event accepted and 2 reviewable file(s) were prepared from 3 changed file(s). 1 file(s) were skipped."));
+                        .value("Pull request event accepted and 2 file(s) were prepared from 3 changed file(s). 1 file(s) were skipped. 2 file(s) were analyzed and 2 review finding(s) were generated."));
 
         verify(payloadParser).parse(any(byte[].class));
         verify(gitHubWebhookService).handle("pull_request", "delivery-123", event);
@@ -121,8 +124,7 @@ class GitHubWebhookControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(PAYLOAD))
                 .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.status").value(401))
                 .andExpect(jsonPath("$.error").value("Unauthorized"))
-                .andExpect(jsonPath("$.message")
-                        .value("Invalid or missing GitHub webhook signature."));
+                .andExpect(jsonPath("$.message").value("Invalid or missing GitHub webhook signature."));
 
         verifyNoInteractions(payloadParser, gitHubWebhookService);
     }
@@ -204,9 +206,7 @@ class GitHubWebhookControllerTest {
                 42,
                 new GitHubPullRequest(
                         "Add payment validation",
-                        "https://github.com/kellidavis/ai-code-review-assistant/pull/42"
-                ),
-                new GitHubRepository("kellidavis/ai-code-review-assistant")
-        );
+                        "https://github.com/kellidavis/ai-code-review-assistant/pull/42"),
+                new GitHubRepository("kellidavis/ai-code-review-assistant"));
     }
 }

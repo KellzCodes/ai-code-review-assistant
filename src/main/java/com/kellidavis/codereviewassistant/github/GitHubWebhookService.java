@@ -17,13 +17,19 @@ public class GitHubWebhookService {
 
     private final GitHubPullRequestFilesClient gitHubPullRequestFilesClient;
     private final GitHubPullRequestFilesPreparer gitHubPullRequestFilesPreparer;
+    private final GitHubPullRequestPatchExtractor gitHubPullRequestPatchExtractor;
+    private final GitHubPullRequestReviewer gitHubPullRequestReviewer;
 
     public GitHubWebhookService(
             GitHubPullRequestFilesClient gitHubPullRequestFilesClient,
-            GitHubPullRequestFilesPreparer gitHubPullRequestFilesPreparer
+            GitHubPullRequestFilesPreparer gitHubPullRequestFilesPreparer,
+            GitHubPullRequestPatchExtractor gitHubPullRequestPatchExtractor,
+            GitHubPullRequestReviewer gitHubPullRequestReviewer
     ) {
         this.gitHubPullRequestFilesClient = gitHubPullRequestFilesClient;
         this.gitHubPullRequestFilesPreparer = gitHubPullRequestFilesPreparer;
+        this.gitHubPullRequestPatchExtractor = gitHubPullRequestPatchExtractor;
+        this.gitHubPullRequestReviewer = gitHubPullRequestReviewer;
     }
 
     public GitHubWebhookResponse handle(String eventType, String deliveryId, GitHubPullRequestEvent event) {
@@ -38,8 +44,9 @@ public class GitHubWebhookService {
                     0,
                     0,
                     0,
-                    "Webhook event type is not supported."
-            );
+                    0,
+                    0,
+                    "Webhook event type is not supported.");
         }
 
         if (!REVIEW_ACTIONS.contains(event.action())) {
@@ -53,6 +60,8 @@ public class GitHubWebhookService {
                     0,
                     0,
                     0,
+                    0,
+                    0,
                     "Pull request action does not require a code review.");
         }
 
@@ -61,6 +70,12 @@ public class GitHubWebhookService {
                         gitHubPullRequestFilesClient.fetchPullRequestFiles(
                                 event.repository().fullName(),
                                 event.number()));
+
+        PullRequestPatchExtractionResult extractionResult =
+                gitHubPullRequestPatchExtractor.extractReviewableFiles(preparationResult.preparedFiles());
+
+        GitHubPullRequestReviewResult reviewResult =
+                gitHubPullRequestReviewer.reviewFiles(extractionResult.reviewableFiles());
 
         return new GitHubWebhookResponse(
                 ACCEPTED_STATUS,
@@ -72,12 +87,18 @@ public class GitHubWebhookService {
                 preparationResult.totalChangedFiles(),
                 preparationResult.preparedFiles().size(),
                 preparationResult.skippedFiles(),
+                reviewResult.reviewedFiles(),
+                reviewResult.totalFindings(),
                 "Pull request event accepted and "
                         + preparationResult.preparedFiles().size()
-                        + " reviewable file(s) were prepared from "
+                        + " file(s) were prepared from "
                         + preparationResult.totalChangedFiles()
                         + " changed file(s). "
                         + preparationResult.skippedFiles()
-                        + " file(s) were skipped.");
+                        + " file(s) were skipped. "
+                        + reviewResult.reviewedFiles()
+                        + " file(s) were analyzed and "
+                        + reviewResult.totalFindings()
+                        + " review finding(s) were generated.");
     }
 }

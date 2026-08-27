@@ -1,5 +1,6 @@
 package com.kellidavis.codereviewassistant.github;
 
+import com.kellidavis.codereviewassistant.review.analysis.RuleBasedCodeAnalyzer;
 import org.junit.jupiter.api.Test;
 import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -9,15 +10,20 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class GitHubWebhookServiceTest {
-
     private final GitHubPullRequestFilesClient gitHubPullRequestFilesClient = mock(GitHubPullRequestFilesClient.class);
     private final PullRequestFileLanguageResolver pullRequestFileLanguageResolver = new PullRequestFileLanguageResolver();
     private final GitHubPullRequestFilesPreparer gitHubPullRequestFilesPreparer =
             new GitHubPullRequestFilesPreparer(pullRequestFileLanguageResolver);
+    private final GitHubPullRequestPatchExtractor gitHubPullRequestPatchExtractor =
+            new GitHubPullRequestPatchExtractor();
+    private final GitHubPullRequestReviewer gitHubPullRequestReviewer =
+            new GitHubPullRequestReviewer(new RuleBasedCodeAnalyzer());
 
     private final GitHubWebhookService gitHubWebhookService = new GitHubWebhookService(
             gitHubPullRequestFilesClient,
-            gitHubPullRequestFilesPreparer);
+            gitHubPullRequestFilesPreparer,
+            gitHubPullRequestPatchExtractor,
+            gitHubPullRequestReviewer);
 
     @Test
     void handle_withOpenedPullRequest_returnsAcceptedResponseAndFetchesFiles() {
@@ -27,7 +33,12 @@ class GitHubWebhookServiceTest {
                 new GitHubPullRequestFileResponse(
                         "src/main/java/PaymentService.java",
                         "modified",
-                        "@@ -1,4 +1,5 @@",
+                        """
+                        @@ -1,4 +1,5 @@
+                         public class PaymentService {
+                        +    System.out.println("Processing payment");
+                         }
+                        """,
                         3,
                         1,
                         4,
@@ -35,7 +46,12 @@ class GitHubWebhookServiceTest {
                 new GitHubPullRequestFileResponse(
                         "src/main/java/OrderService.java",
                         "added",
-                        "@@ -0,0 +1,8 @@",
+                        """
+                        @@ -0,0 +1,3 @@
+                        +public class OrderService {
+                        +    String token = "secret123";
+                        +}
+                        """,
                         8,
                         0,
                         8,
@@ -64,8 +80,10 @@ class GitHubWebhookServiceTest {
         assertThat(response.totalChangedFiles()).isEqualTo(3);
         assertThat(response.preparedFiles()).isEqualTo(2);
         assertThat(response.skippedFiles()).isEqualTo(1);
+        assertThat(response.reviewedFiles()).isEqualTo(2);
+        assertThat(response.totalFindings()).isEqualTo(2);
         assertThat(response.message()).isEqualTo(
-                "Pull request event accepted and 2 reviewable file(s) were prepared from 3 changed file(s). 1 file(s) were skipped.");
+                "Pull request event accepted and 2 file(s) were prepared from 3 changed file(s). 1 file(s) were skipped. 2 file(s) were analyzed and 2 review finding(s) were generated.");
 
         verify(gitHubPullRequestFilesClient).fetchPullRequestFiles("kellidavis/ai-code-review-assistant",
                 42);
@@ -83,6 +101,8 @@ class GitHubWebhookServiceTest {
         assertThat(response.totalChangedFiles()).isZero();
         assertThat(response.preparedFiles()).isZero();
         assertThat(response.skippedFiles()).isZero();
+        assertThat(response.reviewedFiles()).isZero();
+        assertThat(response.totalFindings()).isZero();
         assertThat(response.message()).isEqualTo("Pull request action does not require a code review.");
 
         verifyNoInteractions(gitHubPullRequestFilesClient);
@@ -99,6 +119,8 @@ class GitHubWebhookServiceTest {
         assertThat(response.totalChangedFiles()).isZero();
         assertThat(response.preparedFiles()).isZero();
         assertThat(response.skippedFiles()).isZero();
+        assertThat(response.reviewedFiles()).isZero();
+        assertThat(response.totalFindings()).isZero();
         assertThat(response.message()).isEqualTo("Webhook event type is not supported.");
 
         verifyNoInteractions(gitHubPullRequestFilesClient);

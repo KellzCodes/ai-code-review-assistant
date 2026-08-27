@@ -20,7 +20,7 @@ The project is in early development.
 The application currently has two working areas:
 
 1. A REST API for submitting code review requests directly
-2. A GitHub webhook pipeline that validates pull request events, retrieves changed pull request files from GitHub, and prepares reviewable files for later analysis
+2. A GitHub webhook pipeline that validates pull request events, retrieves changed pull request files from GitHub, extracts reviewable added code, and analyzes it with the existing review rules
 
 The application does not yet:
 
@@ -58,6 +58,8 @@ The hardcoded-secret rule uses basic pattern matching and is not intended to rep
 - Pull request webhook payload validation
 - Retrieval of changed pull request files from GitHub for supported webhook events
 - Preparation of reviewable pull request files by filtering skipped files and resolving languages
+- Extraction of added reviewable code from GitHub pull request patches
+- Automatic rule-based analysis of extracted pull request code during supported webhook events
 - Automated tests for API, webhook, validation, and analysis behavior
 
 ## Technologies
@@ -197,11 +199,13 @@ For supported GitHub webhook events, the application currently does the followin
    - skipping removed files
    - skipping files with missing or blank patch data
    - inferring the programming language from the file extension when possible
-6. Returns an accepted response describing how many files were retrieved, prepared, and skipped
+6. Extracts only added reviewable code from each prepared patch
+7. Runs the existing rule-based analyzer against the extracted code
+8. Returns an accepted response describing how many files were prepared, analyzed, and how many review findings were generated
 
 ### Pull Request File Preparation
 
-The current webhook pipeline now transforms GitHub file responses into an internal review-ready shape before any future AI analysis is added.
+The webhook pipeline transforms GitHub file responses into an internal review-ready shape before analysis runs.
 
 Each prepared file currently includes:
 
@@ -212,7 +216,18 @@ Each prepared file currently includes:
 - additions count
 - deletions count
 
-This stage is intentionally incremental. It does not yet analyze the prepared files or generate GitHub review comments, but it creates the clean handoff point for that next step.
+This stage now performs rule-based analysis on extracted pull request code, but it does not yet post review comments back to GitHub.
+
+### Pull Request Patch Extraction And Review
+
+After file preparation, the application extracts only added lines from each GitHub patch and ignores diff metadata, removed lines, and unchanged context lines.
+
+The extracted code is then sent through the existing rule-based `CodeAnalyzer`, which currently checks for:
+
+- `System.out.println` usage
+- possible hardcoded secrets
+
+The webhook response now returns a simple pull request review summary with analyzed file counts and total findings. It does not yet post review comments back to GitHub.
 
 ### Example Accepted Response
 
@@ -227,7 +242,9 @@ This stage is intentionally incremental. It does not yet analyze the prepared fi
   "totalChangedFiles": 3,
   "preparedFiles": 2,
   "skippedFiles": 1,
-  "message": "Pull request event accepted and 2 reviewable file(s) were prepared from 3 changed file(s). 1 file(s) were skipped."
+  "reviewedFiles": 2,
+  "totalFindings": 2,
+  "message": "Pull request event accepted and 2 file(s) were prepared from 3 changed file(s). 1 file(s) were skipped. 2 file(s) were analyzed and 2 review finding(s) were generated."
 }
 ```
 
@@ -246,6 +263,8 @@ Unsupported event types or pull request actions are ignored safely.
   "totalChangedFiles": 0,
   "preparedFiles": 0,
   "skippedFiles": 0,
+  "reviewedFiles": 0,
+  "totalFindings": 0,
   "message": "Webhook event type is not supported."
 }
 ```
@@ -274,4 +293,4 @@ Run the full test suite on Windows:
 
 ## Project Status
 
-This project is actively being developed as part of a software engineering portfolio. The current focus is building the GitHub integration incrementally before adding full AI-powered pull request review behavior.
+This project is actively being developed as part of a software engineering portfolio. The current focus is building the GitHub integration before adding full AI-powered pull request review behavior.
