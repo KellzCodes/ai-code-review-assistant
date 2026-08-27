@@ -1,11 +1,11 @@
 package com.kellidavis.codereviewassistant.github;
 
 import org.springframework.stereotype.Service;
+import java.util.List;
 import java.util.Set;
 
 @Service
 public class GitHubWebhookService {
-
     private static final String PULL_REQUEST_EVENT_TYPE = "pull_request";
     private static final String IGNORED_STATUS = "IGNORED";
     private static final String ACCEPTED_STATUS = "ACCEPTED";
@@ -46,6 +46,7 @@ public class GitHubWebhookService {
                     0,
                     0,
                     0,
+                    List.of(),
                     "Webhook event type is not supported.");
         }
 
@@ -62,6 +63,7 @@ public class GitHubWebhookService {
                     0,
                     0,
                     0,
+                    List.of(),
                     "Pull request action does not require a code review.");
         }
 
@@ -89,6 +91,7 @@ public class GitHubWebhookService {
                 preparationResult.skippedFiles(),
                 reviewResult.reviewedFiles(),
                 reviewResult.totalFindings(),
+                reviewResult.findings(),
                 "Pull request event accepted and "
                         + preparationResult.preparedFiles().size()
                         + " file(s) were prepared from "

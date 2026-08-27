@@ -3,9 +3,14 @@ package com.kellidavis.codereviewassistant.github;
 import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class GitHubPullRequestPatchExtractor {
+    private static final Pattern HUNK_HEADER_PATTERN =
+            Pattern.compile("^@@ -\\d+(?:,\\d+)? \\+(\\d+)(?:,\\d+)? @@.*$");
+
     public PullRequestPatchExtractionResult extractReviewableFiles(List<PreparedPullRequestFile> preparedFiles) {
         if (preparedFiles == null) {
             return new PullRequestPatchExtractionResult(List.of(), 0, 0);
@@ -15,31 +20,35 @@ public class GitHubPullRequestPatchExtractor {
         int skippedFiles = 0;
 
         for (PreparedPullRequestFile preparedFile : preparedFiles) {
-            String reviewableCode = extractReviewableCode(preparedFile);
-            if (reviewableCode == null) {
+            ReviewablePullRequestFile reviewableFile = extractReviewableFile(preparedFile);
+            if (reviewableFile == null) {
                 skippedFiles++;
                 continue;
             }
 
-            reviewableFiles.add(new ReviewablePullRequestFile(
-                    preparedFile.filePath(),
-                    preparedFile.language(),
-                    reviewableCode));
+            reviewableFiles.add(reviewableFile);
         }
 
         return new PullRequestPatchExtractionResult(reviewableFiles, preparedFiles.size(), skippedFiles);
     }
 
-    private String extractReviewableCode(PreparedPullRequestFile preparedFile) {
+    private ReviewablePullRequestFile extractReviewableFile(PreparedPullRequestFile preparedFile) {
         if (preparedFile == null || preparedFile.patch() == null || preparedFile.patch().isBlank()) {
             return null;
         }
 
         List<String> addedLines = new ArrayList<>();
+        List<Integer> fileLineNumbers = new ArrayList<>();
         boolean insideHunk = false;
+        int currentFileLineNumber = -1;
 
         for (String patchLine : preparedFile.patch().lines().toList()) {
             if (isHunkHeaderLine(patchLine)) {
+                currentFileLineNumber = extractNewFileStartLineNumber(patchLine);
+                if (currentFileLineNumber < 0) {
+                    return null;
+                }
+
                 insideHunk = true;
                 continue;
             }
@@ -48,12 +57,23 @@ public class GitHubPullRequestPatchExtractor {
                 continue;
             }
 
-            if (isPostHunkMetadataLine(patchLine) || isRemovedLine(patchLine) || isContextLine(patchLine)) {
+            if (isPostHunkMetadataLine(patchLine)) {
                 continue;
             }
 
-            if (patchLine.startsWith("+")) {
+            if (isContextLine(patchLine)) {
+                currentFileLineNumber++;
+                continue;
+            }
+
+            if (isRemovedLine(patchLine)) {
+                continue;
+            }
+
+            if (isAddedLine(patchLine)) {
                 addedLines.add(patchLine.substring(1));
+                fileLineNumbers.add(currentFileLineNumber);
+                currentFileLineNumber++;
             }
         }
 
@@ -62,11 +82,28 @@ public class GitHubPullRequestPatchExtractor {
         }
 
         String reviewableCode = String.join("\n", addedLines);
-        return reviewableCode.isBlank() ? null : reviewableCode;
+        if (reviewableCode.isBlank()) {
+            return null;
+        }
+
+        return new ReviewablePullRequestFile(
+                preparedFile.filePath(),
+                preparedFile.language(),
+                reviewableCode,
+                fileLineNumbers);
     }
 
     private boolean isHunkHeaderLine(String patchLine) {
         return patchLine.startsWith("@@");
+    }
+
+    private int extractNewFileStartLineNumber(String patchLine) {
+        Matcher matcher = HUNK_HEADER_PATTERN.matcher(patchLine);
+        if (!matcher.matches()) {
+            return -1;
+        }
+
+        return Integer.parseInt(matcher.group(1));
     }
 
     private boolean isPostHunkMetadataLine(String patchLine) {
@@ -79,5 +116,9 @@ public class GitHubPullRequestPatchExtractor {
 
     private boolean isContextLine(String patchLine) {
         return patchLine.startsWith(" ");
+    }
+
+    private boolean isAddedLine(String patchLine) {
+        return patchLine.startsWith("+");
     }
 }

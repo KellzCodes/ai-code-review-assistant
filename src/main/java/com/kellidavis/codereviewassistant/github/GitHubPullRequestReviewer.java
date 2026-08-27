@@ -28,14 +28,25 @@ public class GitHubPullRequestReviewer {
                 continue;
             }
 
-            findings.addAll(codeAnalyzer.analyze(new ReviewRequest(
+            for (ReviewFinding finding : codeAnalyzer.analyze(new ReviewRequest(
                     reviewableFile.filePath(),
                     reviewableFile.language(),
-                    reviewableFile.reviewableCode())));
+                    reviewableFile.reviewableCode()))) {
+                findings.add(mapFindingToFileLine(reviewableFile, finding));
+            }
             reviewedFiles++;
         }
 
         return new GitHubPullRequestReviewResult(findings, reviewedFiles);
+    }
+
+    private ReviewFinding mapFindingToFileLine(ReviewablePullRequestFile reviewableFile, ReviewFinding finding) {
+        return new ReviewFinding(
+                reviewableFile.filePath(),
+                reviewableFile.mapToFileLineNumber(finding.lineNumber()),
+                finding.category(),
+                finding.severity(),
+                finding.message());
     }
 
     private boolean shouldSkip(ReviewablePullRequestFile reviewableFile) {
@@ -45,6 +56,8 @@ public class GitHubPullRequestReviewer {
                 || reviewableFile.language() == null
                 || reviewableFile.language().isBlank()
                 || reviewableFile.reviewableCode() == null
-                || reviewableFile.reviewableCode().isBlank();
+                || reviewableFile.reviewableCode().isBlank()
+                || reviewableFile.fileLineNumbers() == null
+                || reviewableFile.fileLineNumbers().isEmpty();
     }
 }

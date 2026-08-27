@@ -60,6 +60,7 @@ The hardcoded-secret rule uses basic pattern matching and is not intended to rep
 - Preparation of reviewable pull request files by filtering skipped files and resolving languages
 - Extraction of added reviewable code from GitHub pull request patches
 - Automatic rule-based analysis of extracted pull request code during supported webhook events
+- Mapping GitHub pull request review findings back to real file line numbers
 - Automated tests for API, webhook, validation, and analysis behavior
 
 ## Technologies
@@ -201,7 +202,8 @@ For supported GitHub webhook events, the application currently does the followin
    - inferring the programming language from the file extension when possible
 6. Extracts only added reviewable code from each prepared patch
 7. Runs the existing rule-based analyzer against the extracted code
-8. Returns an accepted response describing how many files were prepared, analyzed, and how many review findings were generated
+8. Maps review findings from extracted snippet line numbers back to real pull request file lines
+9. Returns an accepted response describing how many files were prepared, analyzed, how many review findings were generated, and which file lines were flagged
 
 ### Pull Request File Preparation
 
@@ -222,12 +224,14 @@ This stage now performs rule-based analysis on extracted pull request code, but 
 
 After file preparation, the application extracts only added lines from each GitHub patch and ignores diff metadata, removed lines, and unchanged context lines.
 
+While extracting added code, the application also keeps track of the real pull request file line number for each extracted line. That allows later review findings to point back to the actual changed file line instead of the temporary extracted snippet line.
+
 The extracted code is then sent through the existing rule-based `CodeAnalyzer`, which currently checks for:
 
 - `System.out.println` usage
 - possible hardcoded secrets
 
-The webhook response now returns a simple pull request review summary with analyzed file counts and total findings. It does not yet post review comments back to GitHub.
+The webhook response now returns a pull request review summary with analyzed file counts, total findings, and mapped findings that use real file line numbers. It does not yet post review comments back to GitHub.
 
 ### Example Accepted Response
 
@@ -244,6 +248,22 @@ The webhook response now returns a simple pull request review summary with analy
   "skippedFiles": 1,
   "reviewedFiles": 2,
   "totalFindings": 2,
+  "findings": [
+    {
+      "filePath": "src/main/java/PaymentService.java",
+      "lineNumber": 2,
+      "category": "MAINTAINABILITY",
+      "severity": "LOW",
+      "message": "Avoid System.out.println in application code. Use a logger instead."
+    },
+    {
+      "filePath": "src/main/java/OrderService.java",
+      "lineNumber": 2,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "message": "Possible hardcoded secret detected. Store sensitive values in environment variables or a secret manager."
+    }
+  ],
   "message": "Pull request event accepted and 2 file(s) were prepared from 3 changed file(s). 1 file(s) were skipped. 2 file(s) were analyzed and 2 review finding(s) were generated."
 }
 ```
@@ -265,6 +285,7 @@ Unsupported event types or pull request actions are ignored safely.
   "skippedFiles": 0,
   "reviewedFiles": 0,
   "totalFindings": 0,
+  "findings": [],
   "message": "Webhook event type is not supported."
 }
 ```

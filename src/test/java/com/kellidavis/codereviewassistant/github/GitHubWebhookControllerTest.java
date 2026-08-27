@@ -1,6 +1,9 @@
 package com.kellidavis.codereviewassistant.github;
 
 import com.kellidavis.codereviewassistant.error.GlobalExceptionHandler;
+import com.kellidavis.codereviewassistant.review.ReviewCategory;
+import com.kellidavis.codereviewassistant.review.ReviewFinding;
+import com.kellidavis.codereviewassistant.review.ReviewSeverity;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -8,6 +11,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -81,6 +85,19 @@ class GitHubWebhookControllerTest {
                 1,
                 2,
                 2,
+                List.of(
+                        new ReviewFinding(
+                                "src/main/java/PaymentService.java",
+                                2,
+                                ReviewCategory.MAINTAINABILITY,
+                                ReviewSeverity.LOW,
+                                "Avoid System.out.println in application code. Use a logger instead."),
+                        new ReviewFinding(
+                                "src/main/java/OrderService.java",
+                                2,
+                                ReviewCategory.SECURITY,
+                                ReviewSeverity.HIGH,
+                                "Possible hardcoded secret detected. Store sensitive values in environment variables or a secret manager.")),
                 "Pull request event accepted and 2 file(s) were prepared from 3 changed file(s). 1 file(s) were skipped. 2 file(s) were analyzed and 2 review finding(s) were generated.");
 
         when(signatureVerifier.isValid(any(byte[].class), eq("sha256=valid"))).thenReturn(true);
@@ -106,6 +123,10 @@ class GitHubWebhookControllerTest {
                 .andExpect(jsonPath("$.skippedFiles").value(1))
                 .andExpect(jsonPath("$.reviewedFiles").value(2))
                 .andExpect(jsonPath("$.totalFindings").value(2))
+                .andExpect(jsonPath("$.findings[0].filePath").value("src/main/java/PaymentService.java"))
+                .andExpect(jsonPath("$.findings[0].lineNumber").value(2))
+                .andExpect(jsonPath("$.findings[1].filePath").value("src/main/java/OrderService.java"))
+                .andExpect(jsonPath("$.findings[1].lineNumber").value(2))
                 .andExpect(jsonPath("$.message")
                         .value("Pull request event accepted and 2 file(s) were prepared from 3 changed file(s). 1 file(s) were skipped. 2 file(s) were analyzed and 2 review finding(s) were generated."));
 
@@ -157,16 +178,14 @@ class GitHubWebhookControllerTest {
         when(signatureVerifier.isValid(any(byte[].class), eq("sha256=valid"))).thenReturn(true);
 
         when(payloadParser.parse(any(byte[].class))).thenThrow(new InvalidGitHubWebhookPayloadException(
-                        "Webhook payload must contain valid JSON.",
-                        new RuntimeException("Test JSON parsing failure")));
+                        "Webhook payload must contain valid JSON.", new RuntimeException("Test JSON parsing failure")));
 
         mockMvc.perform(post("/api/github/webhooks")
                         .header("X-GitHub-Event", "pull_request")
                         .header("X-GitHub-Delivery", "delivery-123")
                         .header("X-Hub-Signature-256", "sha256=valid")
                         .contentType(MediaType.APPLICATION_JSON).content(MALFORMED_PAYLOAD))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.error").value("Bad Request"))
                 .andExpect(jsonPath("$.message").value("Webhook payload must contain valid JSON."));
 

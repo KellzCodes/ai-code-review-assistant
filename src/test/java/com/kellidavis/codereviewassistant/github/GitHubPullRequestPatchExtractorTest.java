@@ -55,12 +55,44 @@ class GitHubPullRequestPatchExtractorTest {
         assertThat(firstReviewableFile.language()).isEqualTo("Java");
         assertThat(firstReviewableFile.reviewableCode())
                 .isEqualTo("    logger.info(\"processed\");\n    return;");
+        assertThat(firstReviewableFile.fileLineNumbers()).containsExactly(9, 10);
 
         ReviewablePullRequestFile secondReviewableFile = result.reviewableFiles().get(1);
         assertThat(secondReviewableFile.filePath()).isEqualTo("web/src/components/ReviewPanel.tsx");
         assertThat(secondReviewableFile.language()).isEqualTo("TypeScript");
         assertThat(secondReviewableFile.reviewableCode())
                 .isEqualTo("const token = \"abc123\";\nconsole.log(token);\n\nexport default token;");
+        assertThat(secondReviewableFile.fileLineNumbers()).containsExactly(1, 2, 3, 4);
+    }
+
+    @Test
+    void extractReviewableFiles_withMultipleHunks_tracksRealFileLineNumbersAcrossHunks() {
+        List<PreparedPullRequestFile> preparedFiles = List.of(
+                new PreparedPullRequestFile(
+                        "src/main/java/PaymentService.java",
+                        "Java",
+                        "modified",
+                        """
+                        @@ -2,2 +2,3 @@
+                         public void first() {
+                        +    System.out.println("first");
+                         }
+                        @@ -20,2 +21,3 @@
+                         public void second() {
+                        +    String token = "secret123";
+                         }
+                        """,
+                        2,
+                        0));
+
+        PullRequestPatchExtractionResult result = gitHubPullRequestPatchExtractor.extractReviewableFiles(preparedFiles);
+
+        assertThat(result.totalPreparedFiles()).isEqualTo(1);
+        assertThat(result.skippedFiles()).isZero();
+        assertThat(result.reviewableFiles()).hasSize(1);
+        assertThat(result.reviewableFiles().get(0).reviewableCode())
+                .isEqualTo("    System.out.println(\"first\");\n    String token = \"secret123\";");
+        assertThat(result.reviewableFiles().get(0).fileLineNumbers()).containsExactly(3, 22);
     }
 
     @Test
@@ -76,8 +108,7 @@ class GitHubPullRequestPatchExtractorTest {
                         +   
                         """,
                         1,
-                        1
-                ),
+                        1),
                 new PreparedPullRequestFile(
                         "src/main/java/LegacyService.java",
                         "Java",
@@ -125,6 +156,7 @@ class GitHubPullRequestPatchExtractorTest {
         assertThat(result.skippedFiles()).isZero();
         assertThat(result.reviewableFiles()).hasSize(1);
         assertThat(result.reviewableFiles().get(0).reviewableCode()).isEqualTo("++counter;");
+        assertThat(result.reviewableFiles().get(0).fileLineNumbers()).containsExactly(4);
     }
 
     @Test

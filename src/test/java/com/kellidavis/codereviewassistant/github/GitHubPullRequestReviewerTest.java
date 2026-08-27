@@ -25,23 +25,25 @@ class GitHubPullRequestReviewerTest {
         ReviewablePullRequestFile firstFile = new ReviewablePullRequestFile(
                 "src/main/java/PaymentService.java",
                 "Java",
-                "System.out.println(\"Processing payment\");");
+                "String status = \"ok\";\nSystem.out.println(\"Processing payment\");",
+                List.of(12, 14));
 
         ReviewablePullRequestFile secondFile = new ReviewablePullRequestFile(
                 "src/main/java/OrderService.java",
                 "Java",
-                "String token = \"secret123\";");
+                "public class OrderService {\nString token = \"secret123\";\n}",
+                List.of(30, 31, 32));
 
         ReviewFinding firstFinding = new ReviewFinding(
                 "src/main/java/PaymentService.java",
-                1,
+                2,
                 ReviewCategory.MAINTAINABILITY,
                 ReviewSeverity.LOW,
                 "Avoid System.out.println in application code. Use a logger instead.");
 
         ReviewFinding secondFinding = new ReviewFinding(
                 "src/main/java/OrderService.java",
-                1,
+                2,
                 ReviewCategory.SECURITY,
                 ReviewSeverity.HIGH,
                 "Possible hardcoded secret detected. Store sensitive values in environment variables or a secret manager.");
@@ -49,27 +51,39 @@ class GitHubPullRequestReviewerTest {
         when(codeAnalyzer.analyze(new ReviewRequest(
                 "src/main/java/PaymentService.java",
                 "Java",
-                "System.out.println(\"Processing payment\");"))).thenReturn(List.of(firstFinding));
+                "String status = \"ok\";\nSystem.out.println(\"Processing payment\");"))).thenReturn(List.of(firstFinding));
 
         when(codeAnalyzer.analyze(new ReviewRequest(
                 "src/main/java/OrderService.java",
                 "Java",
-                "String token = \"secret123\";"))).thenReturn(List.of(secondFinding));
+                "public class OrderService {\nString token = \"secret123\";\n}"))).thenReturn(List.of(secondFinding));
 
         GitHubPullRequestReviewResult result = gitHubPullRequestReviewer.reviewFiles(List.of(firstFile, secondFile));
 
         assertThat(result.reviewedFiles()).isEqualTo(2);
         assertThat(result.totalFindings()).isEqualTo(2);
-        assertThat(result.findings()).containsExactly(firstFinding, secondFinding);
+        assertThat(result.findings()).containsExactly(
+                new ReviewFinding(
+                        "src/main/java/PaymentService.java",
+                        14,
+                        ReviewCategory.MAINTAINABILITY,
+                        ReviewSeverity.LOW,
+                        "Avoid System.out.println in application code. Use a logger instead."),
+                new ReviewFinding(
+                        "src/main/java/OrderService.java",
+                        31,
+                        ReviewCategory.SECURITY,
+                        ReviewSeverity.HIGH,
+                        "Possible hardcoded secret detected. Store sensitive values in environment variables or a secret manager."));
 
         verify(codeAnalyzer).analyze(new ReviewRequest(
                 "src/main/java/PaymentService.java",
                 "Java",
-                "System.out.println(\"Processing payment\");"));
+                "String status = \"ok\";\nSystem.out.println(\"Processing payment\");"));
         verify(codeAnalyzer).analyze(new ReviewRequest(
                 "src/main/java/OrderService.java",
                 "Java",
-                "String token = \"secret123\";"));
+                "public class OrderService {\nString token = \"secret123\";\n}"));
     }
 
     @Test
@@ -81,8 +95,8 @@ class GitHubPullRequestReviewerTest {
                 new ReviewablePullRequestFile(
                         "src/main/java/PaymentService.java",
                         "Java",
-                        "   "
-                ),
+                        "   ",
+                        List.of(1)),
                 null));
 
         assertThat(result.reviewedFiles()).isZero();

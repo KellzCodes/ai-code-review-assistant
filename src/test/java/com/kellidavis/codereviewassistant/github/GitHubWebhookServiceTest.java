@@ -1,5 +1,8 @@
 package com.kellidavis.codereviewassistant.github;
 
+import com.kellidavis.codereviewassistant.review.ReviewCategory;
+import com.kellidavis.codereviewassistant.review.ReviewFinding;
+import com.kellidavis.codereviewassistant.review.ReviewSeverity;
 import com.kellidavis.codereviewassistant.review.analysis.RuleBasedCodeAnalyzer;
 import org.junit.jupiter.api.Test;
 import java.util.List;
@@ -82,6 +85,19 @@ class GitHubWebhookServiceTest {
         assertThat(response.skippedFiles()).isEqualTo(1);
         assertThat(response.reviewedFiles()).isEqualTo(2);
         assertThat(response.totalFindings()).isEqualTo(2);
+        assertThat(response.findings()).containsExactly(
+                new ReviewFinding(
+                        "src/main/java/PaymentService.java",
+                        2,
+                        ReviewCategory.MAINTAINABILITY,
+                        ReviewSeverity.LOW,
+                        "Avoid System.out.println in application code. Use a logger instead."),
+                new ReviewFinding(
+                        "src/main/java/OrderService.java",
+                        2,
+                        ReviewCategory.SECURITY,
+                        ReviewSeverity.HIGH,
+                        "Possible hardcoded secret detected. Store sensitive values in environment variables or a secret manager."));
         assertThat(response.message()).isEqualTo(
                 "Pull request event accepted and 2 file(s) were prepared from 3 changed file(s). 1 file(s) were skipped. 2 file(s) were analyzed and 2 review finding(s) were generated.");
 
@@ -103,6 +119,7 @@ class GitHubWebhookServiceTest {
         assertThat(response.skippedFiles()).isZero();
         assertThat(response.reviewedFiles()).isZero();
         assertThat(response.totalFindings()).isZero();
+        assertThat(response.findings()).isEmpty();
         assertThat(response.message()).isEqualTo("Pull request action does not require a code review.");
 
         verifyNoInteractions(gitHubPullRequestFilesClient);
@@ -121,6 +138,7 @@ class GitHubWebhookServiceTest {
         assertThat(response.skippedFiles()).isZero();
         assertThat(response.reviewedFiles()).isZero();
         assertThat(response.totalFindings()).isZero();
+        assertThat(response.findings()).isEmpty();
         assertThat(response.message()).isEqualTo("Webhook event type is not supported.");
 
         verifyNoInteractions(gitHubPullRequestFilesClient);
