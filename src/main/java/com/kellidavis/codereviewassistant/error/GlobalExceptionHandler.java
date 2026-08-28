@@ -1,9 +1,9 @@
 package com.kellidavis.codereviewassistant.error;
 
-import com.kellidavis.codereviewassistant.github.GitHubApiException;
-import com.kellidavis.codereviewassistant.github.GitHubWebhookErrorResponse;
-import com.kellidavis.codereviewassistant.github.InvalidGitHubWebhookPayloadException;
-import com.kellidavis.codereviewassistant.github.InvalidGitHubWebhookSignatureException;
+import com.kellidavis.codereviewassistant.github.api.GitHubApiException;
+import com.kellidavis.codereviewassistant.github.webhook.GitHubWebhookErrorResponse;
+import com.kellidavis.codereviewassistant.github.webhook.InvalidGitHubWebhookPayloadException;
+import com.kellidavis.codereviewassistant.github.webhook.InvalidGitHubWebhookSignatureException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
