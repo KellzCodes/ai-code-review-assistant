@@ -10,10 +10,8 @@ public class GitHubWebhookService {
     private static final String IGNORED_STATUS = "IGNORED";
     private static final String ACCEPTED_STATUS = "ACCEPTED";
 
-    private static final Set<String> REVIEW_ACTIONS = Set.of(
-            "opened",
-            "reopened",
-            "synchronize");
+    private static final Set<String> REVIEW_ACTIONS = Set.of("opened", "reopened", "synchronize");
+    // System.out.println("multi-hunk top");
 
     private final GitHubPullRequestFilesClient gitHubPullRequestFilesClient;
     private final GitHubPullRequestFilesPreparer gitHubPullRequestFilesPreparer;
@@ -78,6 +76,7 @@ public class GitHubWebhookService {
 
         GitHubPullRequestReviewResult reviewResult =
                 gitHubPullRequestReviewer.reviewFiles(extractionResult.reviewableFiles());
+        // token = "secret123"
 
         return new GitHubWebhookResponse(
                 ACCEPTED_STATUS,
