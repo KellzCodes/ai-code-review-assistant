@@ -86,6 +86,8 @@ class GitHubWebhookControllerTest {
                 1,
                 2,
                 2,
+                true,
+                "https://github.com/kellidavis/ai-code-review-assistant/pull/42#issuecomment-1",
                 List.of(
                         new ReviewFinding(
                                 "src/main/java/PaymentService.java",
@@ -99,7 +101,7 @@ class GitHubWebhookControllerTest {
                                 ReviewCategory.SECURITY,
                                 ReviewSeverity.HIGH,
                                 "Possible hardcoded secret detected. Store sensitive values in environment variables or a secret manager.")),
-                "Pull request event accepted and 2 file(s) were prepared from 3 changed file(s). 1 file(s) were skipped. 2 file(s) were analyzed and 2 review finding(s) were generated.");
+                "Pull request event accepted and 2 file(s) were prepared from 3 changed file(s). 1 file(s) were skipped. 2 file(s) were analyzed and 2 review finding(s) were generated. A summary comment was posted to the pull request.");
 
         when(signatureVerifier.isValid(any(byte[].class), eq("sha256=valid"))).thenReturn(true);
 
@@ -124,12 +126,15 @@ class GitHubWebhookControllerTest {
                 .andExpect(jsonPath("$.skippedFiles").value(1))
                 .andExpect(jsonPath("$.reviewedFiles").value(2))
                 .andExpect(jsonPath("$.totalFindings").value(2))
+                .andExpect(jsonPath("$.summaryCommentPosted").value(true))
+                .andExpect(jsonPath("$.summaryCommentUrl")
+                        .value("https://github.com/kellidavis/ai-code-review-assistant/pull/42#issuecomment-1"))
                 .andExpect(jsonPath("$.findings[0].filePath").value("src/main/java/PaymentService.java"))
                 .andExpect(jsonPath("$.findings[0].lineNumber").value(2))
                 .andExpect(jsonPath("$.findings[1].filePath").value("src/main/java/OrderService.java"))
                 .andExpect(jsonPath("$.findings[1].lineNumber").value(2))
                 .andExpect(jsonPath("$.message")
-                        .value("Pull request event accepted and 2 file(s) were prepared from 3 changed file(s). 1 file(s) were skipped. 2 file(s) were analyzed and 2 review finding(s) were generated."));
+                        .value("Pull request event accepted and 2 file(s) were prepared from 3 changed file(s). 1 file(s) were skipped. 2 file(s) were analyzed and 2 review finding(s) were generated. A summary comment was posted to the pull request."));
 
         verify(payloadParser).parse(any(byte[].class));
         verify(gitHubWebhookService).handle("pull_request", "delivery-123", event);
