@@ -6,6 +6,7 @@ import com.kellidavis.codereviewassistant.github.api.GitHubPullRequestCommentsCl
 import com.kellidavis.codereviewassistant.github.api.GitHubPullRequestFilesClient;
 import com.kellidavis.codereviewassistant.github.review.*;
 import org.springframework.stereotype.Service;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
@@ -15,10 +16,7 @@ public class GitHubWebhookService {
     private static final String IGNORED_STATUS = "IGNORED";
     private static final String ACCEPTED_STATUS = "ACCEPTED";
 
-    private static final Set<String> REVIEW_ACTIONS = Set.of(
-            "opened",
-            "reopened",
-            "synchronize");
+    private static final Set<String> REVIEW_ACTIONS = Set.of("opened", "reopened", "synchronize");
 
     private final GitHubPullRequestFilesClient gitHubPullRequestFilesClient;
     private final GitHubPullRequestFilesPreparer gitHubPullRequestFilesPreparer;
@@ -33,8 +31,8 @@ public class GitHubWebhookService {
             GitHubPullRequestPatchExtractor gitHubPullRequestPatchExtractor,
             GitHubPullRequestReviewer gitHubPullRequestReviewer,
             GitHubPullRequestCommentsClient gitHubPullRequestCommentsClient,
-            GitHubPullRequestReviewCommentFormatter gitHubPullRequestReviewCommentFormatter
-    ) {
+            GitHubPullRequestReviewCommentFormatter gitHubPullRequestReviewCommentFormatter) {
+
         this.gitHubPullRequestFilesClient = gitHubPullRequestFilesClient;
         this.gitHubPullRequestFilesPreparer = gitHubPullRequestFilesPreparer;
         this.gitHubPullRequestPatchExtractor = gitHubPullRequestPatchExtractor;
@@ -101,17 +99,17 @@ public class GitHubWebhookService {
 
         boolean summaryCommentPosted = false;
         String summaryCommentUrl = null;
+        String summaryCommentAction = null;
         String summaryCommentFailureMessage = null;
 
         try {
-            GitHubPullRequestCommentResponse commentResponse =
-                    gitHubPullRequestCommentsClient.postPullRequestComment(
-                            event.repository().fullName(),
-                            event.number(),
-                            summaryComment);
-
+            SummaryCommentResult commentResult = synchronizeSummaryComment(
+                    event.repository().fullName(),
+                    event.number(),
+                    summaryComment);
             summaryCommentPosted = true;
-            summaryCommentUrl = commentResponse.htmlUrl();
+            summaryCommentUrl = commentResult.htmlUrl();
+            summaryCommentAction = commentResult.action();
         } catch (GitHubApiException ex) {
             summaryCommentFailureMessage = ex.getMessage();
         }
@@ -131,15 +129,52 @@ public class GitHubWebhookService {
                 summaryCommentPosted,
                 summaryCommentUrl,
                 reviewResult.findings(),
-                buildAcceptedMessage(preparationResult, reviewResult, summaryCommentPosted, summaryCommentFailureMessage));
+                buildAcceptedMessage(preparationResult, reviewResult, summaryCommentPosted, summaryCommentAction, summaryCommentFailureMessage));
+    }
+
+    private SummaryCommentResult synchronizeSummaryComment(String repositoryFullName, int pullRequestNumber, String summaryComment) {
+        GitHubPullRequestCommentResponse existingSummaryComment = findExistingSummaryComment(
+                gitHubPullRequestCommentsClient.listPullRequestComments(repositoryFullName, pullRequestNumber));
+
+        if (existingSummaryComment != null) {
+            GitHubPullRequestCommentResponse updatedComment =
+                    gitHubPullRequestCommentsClient.updatePullRequestComment(
+                            repositoryFullName,
+                            existingSummaryComment.id(),
+                            summaryComment);
+
+            return new SummaryCommentResult(updatedComment.htmlUrl(), "updated");
+        }
+
+        GitHubPullRequestCommentResponse createdComment =
+                gitHubPullRequestCommentsClient.postPullRequestComment(
+                        repositoryFullName,
+                        pullRequestNumber,
+                        summaryComment);
+
+        return new SummaryCommentResult(createdComment.htmlUrl(), "posted");
+    }
+
+    private GitHubPullRequestCommentResponse findExistingSummaryComment(
+            List<GitHubPullRequestCommentResponse> pullRequestComments) {
+
+        if (pullRequestComments == null || pullRequestComments.isEmpty()) {
+            return null;
+        }
+
+        return pullRequestComments.stream()
+                .filter(comment -> comment != null && comment.id() != null
+                        && gitHubPullRequestReviewCommentFormatter.isSummaryComment(comment.body()))
+                .max(Comparator.comparingLong(GitHubPullRequestCommentResponse::id)).orElse(null);
     }
 
     private String buildAcceptedMessage(
             PullRequestFilePreparationResult preparationResult,
             GitHubPullRequestReviewResult reviewResult,
             boolean summaryCommentPosted,
-            String summaryCommentFailureMessage
-    ) {
+            String summaryCommentAction,
+            String summaryCommentFailureMessage) {
+
         String message = "Pull request event accepted and "
                 + preparationResult.preparedFiles().size()
                 + " file(s) were prepared from "
@@ -153,11 +188,13 @@ public class GitHubWebhookService {
                 + " review finding(s) were generated.";
 
         if (summaryCommentPosted) {
-            return message + " A summary comment was posted to the pull request.";
+            return message + " A summary comment was " + summaryCommentAction + " on the pull request.";
         }
 
         return message
-                + " The summary comment could not be posted to the pull request: "
-                + summaryCommentFailureMessage;
+                + " The summary comment could not be synchronized with the pull request: " + summaryCommentFailureMessage;
+    }
+
+    private record SummaryCommentResult(String htmlUrl, String action) {
     }
 }
