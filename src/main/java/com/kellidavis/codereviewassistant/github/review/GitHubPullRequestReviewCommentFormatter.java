@@ -8,11 +8,14 @@ import java.util.List;
 
 @Component
 public class GitHubPullRequestReviewCommentFormatter {
+    private static final String SUMMARY_COMMENT_MARKER = "<!-- ai-code-review-assistant-summary -->";
+
     public String format(GitHubPullRequestEvent event, PullRequestFilePreparationResult preparationResult,
             GitHubPullRequestReviewResult reviewResult) {
 
         StringBuilder comment = new StringBuilder();
 
+        comment.append(SUMMARY_COMMENT_MARKER).append("\n");
         comment.append("## AI Code Review Summary\n\n");
         comment.append("Pull request: [#").append(event.number()).append(" ").append(event.pullRequest().title())
                 .append("](").append(event.pullRequest().htmlUrl()).append(")\n");
@@ -54,6 +57,10 @@ public class GitHubPullRequestReviewCommentFormatter {
 
         comment.append("\n_Generated automatically by the AI Code Review Assistant._");
         return comment.toString();
+    }
+
+    public boolean isSummaryComment(String commentBody) {
+        return commentBody != null && commentBody.contains(SUMMARY_COMMENT_MARKER);
     }
 
     private int severityRank(ReviewFinding finding) {

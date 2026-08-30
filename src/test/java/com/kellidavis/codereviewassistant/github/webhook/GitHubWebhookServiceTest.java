@@ -92,6 +92,7 @@ class GitHubWebhookServiceTest {
                 "kellidavis/ai-code-review-assistant",
                 42,
                 """
+                <!-- ai-code-review-assistant-summary -->
                 ## AI Code Review Summary
 
                 Pull request: [#42 Add payment validation](https://github.com/kellidavis/ai-code-review-assistant/pull/42)
@@ -110,8 +111,8 @@ class GitHubWebhookServiceTest {
                 2. **[LOW] MAINTAINABILITY** `src/main/java/PaymentService.java:2`
                    Avoid System.out.println in application code. Use a logger instead.
 
-                _Generated automatically by the AI Code Review Assistant._"""
-        )).thenReturn(new GitHubPullRequestCommentResponse(
+                _Generated automatically by the AI Code Review Assistant._"""))
+                .thenReturn(new GitHubPullRequestCommentResponse(
                 "https://github.com/kellidavis/ai-code-review-assistant/pull/42#issuecomment-1"));
 
         GitHubWebhookResponse response = gitHubWebhookService.handle("pull_request", "delivery-123",

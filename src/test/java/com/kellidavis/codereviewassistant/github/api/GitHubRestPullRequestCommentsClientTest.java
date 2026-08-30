@@ -29,6 +29,51 @@ class GitHubRestPullRequestCommentsClientTest {
     }
 
     @Test
+    void listPullRequestComments_withValidResponse_returnsComments() {
+        GitHubRestPullRequestCommentsClient client =
+                new GitHubRestPullRequestCommentsClient(
+                        restClientBuilder,
+                        "https://api.github.com",
+                        "test-token");
+
+        mockServer.expect(requestTo("https://api.github.com/repos/kellidavis/ai-code-review-assistant/issues/42/comments?per_page=100&page=1"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer test-token"))
+                .andExpect(header(HttpHeaders.ACCEPT, "application/vnd.github+json"))
+                .andExpect(header("X-GitHub-Api-Version", "2022-11-28"))
+                .andRespond(withSuccess("""
+                        [
+                          {
+                            "id": 1001,
+                            "body": "first comment",
+                            "html_url": "https://github.com/kellidavis/ai-code-review-assistant/pull/42#issuecomment-1001"
+                          },
+                          {
+                            "id": 1002,
+                            "body": "second comment",
+                            "html_url": "https://github.com/kellidavis/ai-code-review-assistant/pull/42#issuecomment-1002"
+                          }
+                        ]
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThat(client.listPullRequestComments("kellidavis/ai-code-review-assistant", 42))
+                .containsExactly(
+                        new GitHubPullRequestCommentResponse(
+                                1001L,
+                                "first comment",
+                                "https://github.com/kellidavis/ai-code-review-assistant/pull/42#issuecomment-1001"
+                        ),
+                        new GitHubPullRequestCommentResponse(
+                                1002L,
+                                "second comment",
+                                "https://github.com/kellidavis/ai-code-review-assistant/pull/42#issuecomment-1002"
+                        )
+                );
+
+        mockServer.verify();
+    }
+
+    @Test
     void postPullRequestComment_withValidRequest_returnsCommentResponse() {
         GitHubRestPullRequestCommentsClient client =
                 new GitHubRestPullRequestCommentsClient(
@@ -48,6 +93,8 @@ class GitHubRestPullRequestCommentsClientTest {
                         """))
                 .andRespond(withSuccess("""
                         {
+                          "id": 1001,
+                          "body": "## AI Code Review Summary",
                           "html_url": "https://github.com/kellidavis/ai-code-review-assistant/pull/42#issuecomment-1"
                         }
                         """, MediaType.APPLICATION_JSON));
@@ -57,8 +104,47 @@ class GitHubRestPullRequestCommentsClientTest {
                 42,
                 "## AI Code Review Summary");
 
+        assertThat(response.id()).isEqualTo(1001L);
+        assertThat(response.body()).isEqualTo("## AI Code Review Summary");
         assertThat(response.htmlUrl())
                 .isEqualTo("https://github.com/kellidavis/ai-code-review-assistant/pull/42#issuecomment-1");
+
+        mockServer.verify();
+    }
+
+    @Test
+    void updatePullRequestComment_withValidRequest_returnsUpdatedCommentResponse() {
+        GitHubRestPullRequestCommentsClient client =
+                new GitHubRestPullRequestCommentsClient(
+                        restClientBuilder,
+                        "https://api.github.com",
+                        "test-token");
+
+        mockServer.expect(requestTo("https://api.github.com/repos/kellidavis/ai-code-review-assistant/issues/comments/1001"))
+                .andExpect(method(HttpMethod.PATCH))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer test-token"))
+                .andExpect(content().json("""
+                        {
+                          "body": "Updated summary comment"
+                        }
+                        """))
+                .andRespond(withSuccess("""
+                        {
+                          "id": 1001,
+                          "body": "Updated summary comment",
+                          "html_url": "https://github.com/kellidavis/ai-code-review-assistant/pull/42#issuecomment-1001"
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        GitHubPullRequestCommentResponse response = client.updatePullRequestComment(
+                "kellidavis/ai-code-review-assistant",
+                1001L,
+                "Updated summary comment");
+
+        assertThat(response).isEqualTo(new GitHubPullRequestCommentResponse(
+                1001L,
+                "Updated summary comment",
+                "https://github.com/kellidavis/ai-code-review-assistant/pull/42#issuecomment-1001"));
 
         mockServer.verify();
     }
@@ -81,6 +167,23 @@ class GitHubRestPullRequestCommentsClientTest {
     }
 
     @Test
+    void updatePullRequestComment_withInvalidCommentId_throwsException() {
+        GitHubRestPullRequestCommentsClient client =
+                new GitHubRestPullRequestCommentsClient(
+                        restClientBuilder,
+                        "https://api.github.com",
+                        "test-token");
+
+        assertThatThrownBy(() -> client.updatePullRequestComment(
+                "kellidavis/ai-code-review-assistant",
+                0L,
+                "Updated summary comment"
+        ))
+                .isInstanceOf(GitHubApiException.class)
+                .hasMessage("Comment id must be positive.");
+    }
+
+    @Test
     void postPullRequestComment_withMissingToken_throwsException() {
         GitHubRestPullRequestCommentsClient client =
                 new GitHubRestPullRequestCommentsClient(
@@ -91,10 +194,39 @@ class GitHubRestPullRequestCommentsClientTest {
         assertThatThrownBy(() -> client.postPullRequestComment(
                 "kellidavis/ai-code-review-assistant",
                 42,
-                "## AI Code Review Summary"
+                "## AI Code Review Summary")).isInstanceOf(GitHubApiException.class)
+                .hasMessage("GitHub API token is not configured.");
+    }
+
+    @Test
+    void listPullRequestComments_whenGitHubReturnsError_wrapsException() {
+        GitHubRestPullRequestCommentsClient client =
+                new GitHubRestPullRequestCommentsClient(
+                        restClientBuilder,
+                        "https://api.github.com",
+                        "test-token");
+
+        mockServer.expect(requestTo(
+                        "https://api.github.com/repos/kellidavis/ai-code-review-assistant/issues/42/comments?per_page=100&page=1"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {
+                                  "message": "Forbidden"
+                                }
+                                """));
+
+        assertThatThrownBy(() -> client.listPullRequestComments(
+                "kellidavis/ai-code-review-assistant",
+                42
         ))
                 .isInstanceOf(GitHubApiException.class)
-                .hasMessage("GitHub API token is not configured.");
+                .hasMessageContaining("GitHub API returned 403")
+                .hasMessageContaining("while listing pull request comments")
+                .hasCauseInstanceOf(RestClientResponseException.class);
+
+        mockServer.verify();
     }
 
     @Test
@@ -112,6 +244,34 @@ class GitHubRestPullRequestCommentsClientTest {
         ))
                 .isInstanceOf(GitHubApiException.class)
                 .hasMessage("Repository full name must use the format owner/repository.");
+    }
+
+    @Test
+    void updatePullRequestComment_whenGitHubReturnsError_wrapsException() {
+        GitHubRestPullRequestCommentsClient client =
+                new GitHubRestPullRequestCommentsClient(
+                        restClientBuilder,
+                        "https://api.github.com",
+                        "test-token");
+
+        mockServer.expect(requestTo(
+                        "https://api.github.com/repos/kellidavis/ai-code-review-assistant/issues/comments/1001"))
+                .andExpect(method(HttpMethod.PATCH)).andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {
+                                  "message": "Forbidden"
+                                }
+                                """));
+
+        assertThatThrownBy(() -> client.updatePullRequestComment(
+                "kellidavis/ai-code-review-assistant",
+                1001L,
+                "Updated summary comment")).isInstanceOf(GitHubApiException.class)
+                .hasMessageContaining("GitHub API returned 403")
+                .hasMessageContaining("while updating pull request comment 1001")
+                .hasCauseInstanceOf(RestClientResponseException.class);
+
+        mockServer.verify();
     }
 
     @Test

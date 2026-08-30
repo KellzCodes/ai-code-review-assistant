@@ -7,9 +7,7 @@ import com.kellidavis.codereviewassistant.review.ReviewCategory;
 import com.kellidavis.codereviewassistant.review.ReviewFinding;
 import com.kellidavis.codereviewassistant.review.ReviewSeverity;
 import org.junit.jupiter.api.Test;
-
 import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 class GitHubPullRequestReviewCommentFormatterTest {
@@ -28,20 +26,16 @@ class GitHubPullRequestReviewCommentFormatterTest {
                                         "modified",
                                         "@@ -1,1 +1,2 @@",
                                         1,
-                                        0
-                                ),
+                                        0),
                                 new PreparedPullRequestFile(
                                         "src/main/java/OrderService.java",
                                         "Java",
                                         "added",
                                         "@@ -0,0 +1,3 @@",
                                         3,
-                                        0
-                                )
-                        ),
+                                        0)),
                         3,
-                        1
-                );
+                        1);
         GitHubPullRequestReviewResult reviewResult =
                 new GitHubPullRequestReviewResult(
                         List.of(
@@ -50,22 +44,19 @@ class GitHubPullRequestReviewCommentFormatterTest {
                                         2,
                                         ReviewCategory.MAINTAINABILITY,
                                         ReviewSeverity.LOW,
-                                        "Avoid System.out.println in application code. Use a logger instead."
-                                ),
+                                        "Avoid System.out.println in application code. Use a logger instead."),
                                 new ReviewFinding(
                                         "src/main/java/OrderService.java",
                                         2,
                                         ReviewCategory.SECURITY,
                                         ReviewSeverity.HIGH,
-                                        "Possible hardcoded secret detected. Store sensitive values in environment variables or a secret manager."
-                                )
-                        ),
-                        2
-                );
+                                        "Possible hardcoded secret detected. Store sensitive values in environment variables or a secret manager.")),
+                        2);
 
         String comment = formatter.format(event, preparationResult, reviewResult);
 
         assertThat(comment).isEqualTo("""
+                <!-- ai-code-review-assistant-summary -->
                 ## AI Code Review Summary
 
                 Pull request: [#42 Add payment validation](https://github.com/kellidavis/ai-code-review-assistant/pull/42)
@@ -98,6 +89,7 @@ class GitHubPullRequestReviewCommentFormatterTest {
         String comment = formatter.format(event, preparationResult, reviewResult);
 
         assertThat(comment).isEqualTo("""
+                <!-- ai-code-review-assistant-summary -->
                 ## AI Code Review Summary
 
                 Pull request: [#42 Add payment validation](https://github.com/kellidavis/ai-code-review-assistant/pull/42)
@@ -128,18 +120,16 @@ class GitHubPullRequestReviewCommentFormatterTest {
                                         "modified",
                                         "@@ -1,1 +1,2 @@",
                                         1,
-                                        0
-                                )
-                        ),
+                                        0)),
                         1,
-                        0
-                );
+                        0);
         GitHubPullRequestReviewResult reviewResult =
                 new GitHubPullRequestReviewResult(List.of(), 1);
 
         String comment = formatter.format(event, preparationResult, reviewResult);
 
         assertThat(comment).isEqualTo("""
+                <!-- ai-code-review-assistant-summary -->
                 ## AI Code Review Summary
 
                 Pull request: [#42 Add payment validation](https://github.com/kellidavis/ai-code-review-assistant/pull/42)
@@ -158,15 +148,26 @@ class GitHubPullRequestReviewCommentFormatterTest {
                 _Generated automatically by the AI Code Review Assistant._""");
     }
 
+    @Test
+    void isSummaryComment_withMarker_returnsTrue() {
+        assertThat(formatter.isSummaryComment("""
+                <!-- ai-code-review-assistant-summary -->
+                ## AI Code Review Summary
+                """)).isTrue();
+    }
+
+    @Test
+    void isSummaryComment_withoutMarker_returnsFalse() {
+        assertThat(formatter.isSummaryComment("## AI Code Review Summary")).isFalse();
+    }
+
     private GitHubPullRequestEvent createEvent() {
         return new GitHubPullRequestEvent(
                 "opened",
                 42,
                 new GitHubPullRequest(
                         "Add payment validation",
-                        "https://github.com/kellidavis/ai-code-review-assistant/pull/42"
-                ),
-                new GitHubRepository("kellidavis/ai-code-review-assistant")
-        );
+                        "https://github.com/kellidavis/ai-code-review-assistant/pull/42"),
+                new GitHubRepository("kellidavis/ai-code-review-assistant"));
     }
 }
