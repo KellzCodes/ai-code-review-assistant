@@ -321,3 +321,4 @@ Run the full test suite on Windows:
 ## Project Status
 
 This project is actively being developed as part of a software engineering portfolio. The current focus is building the GitHub integration before adding full AI-powered pull request review behavior.
+Smoke test PR for comment support commit
