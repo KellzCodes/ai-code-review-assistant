@@ -5,6 +5,7 @@ import com.kellidavis.codereviewassistant.github.api.GitHubPullRequestCommentRes
 import com.kellidavis.codereviewassistant.github.api.GitHubPullRequestCommentsClient;
 import com.kellidavis.codereviewassistant.github.api.GitHubPullRequestFileResponse;
 import com.kellidavis.codereviewassistant.github.api.GitHubPullRequestFilesClient;
+import com.kellidavis.codereviewassistant.github.api.GitHubPullRequestReviewCommentsClient;
 import com.kellidavis.codereviewassistant.github.review.GitHubPullRequestFilesPreparer;
 import com.kellidavis.codereviewassistant.github.review.GitHubPullRequestPatchExtractor;
 import com.kellidavis.codereviewassistant.github.review.GitHubPullRequestReviewCommentFormatter;
@@ -19,6 +20,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -29,6 +31,8 @@ class GitHubWebhookServiceTest {
     private final GitHubPullRequestFilesClient gitHubPullRequestFilesClient = mock(GitHubPullRequestFilesClient.class);
     private final GitHubPullRequestCommentsClient gitHubPullRequestCommentsClient =
             mock(GitHubPullRequestCommentsClient.class);
+    private final GitHubPullRequestReviewCommentsClient gitHubPullRequestReviewCommentsClient =
+            mock(GitHubPullRequestReviewCommentsClient.class);
     private final PullRequestFileLanguageResolver pullRequestFileLanguageResolver = new PullRequestFileLanguageResolver();
     private final GitHubPullRequestFilesPreparer gitHubPullRequestFilesPreparer =
             new GitHubPullRequestFilesPreparer(pullRequestFileLanguageResolver);
@@ -45,10 +49,11 @@ class GitHubWebhookServiceTest {
             gitHubPullRequestPatchExtractor,
             gitHubPullRequestReviewer,
             gitHubPullRequestCommentsClient,
+            gitHubPullRequestReviewCommentsClient,
             gitHubPullRequestReviewCommentFormatter);
 
     @Test
-    void handle_withOpenedPullRequestAndNoExistingSummaryComment_postsSummaryComment() {
+    void handle_withOpenedPullRequest_postsInlineCommentsAndSummaryComment() {
         GitHubPullRequestEvent event = createEvent("opened");
 
         List<GitHubPullRequestFileResponse> changedFiles = List.of(
@@ -135,6 +140,8 @@ class GitHubWebhookServiceTest {
         assertThat(response.skippedFiles()).isEqualTo(1);
         assertThat(response.reviewedFiles()).isEqualTo(2);
         assertThat(response.totalFindings()).isEqualTo(2);
+        assertThat(response.inlineCommentsPosted()).isEqualTo(2);
+        assertThat(response.inlineCommentsFailed()).isZero();
         assertThat(response.summaryCommentPosted()).isTrue();
         assertThat(response.summaryCommentUrl())
                 .isEqualTo("https://github.com/kellidavis/ai-code-review-assistant/pull/42#issuecomment-1");
@@ -152,7 +159,7 @@ class GitHubWebhookServiceTest {
                         ReviewSeverity.HIGH,
                         "Possible hardcoded secret detected. Store sensitive values in environment variables or a secret manager."));
         assertThat(response.message()).isEqualTo(
-                "Pull request event accepted and 2 file(s) were prepared from 3 changed file(s). 1 file(s) were skipped. 2 file(s) were analyzed and 2 review finding(s) were generated. A summary comment was posted on the pull request.");
+                "Pull request event accepted and 2 file(s) were prepared from 3 changed file(s). 1 file(s) were skipped. 2 file(s) were analyzed and 2 review finding(s) were generated. 2 inline review comment(s) were posted. A summary comment was posted on the pull request.");
 
         verify(gitHubPullRequestFilesClient).fetchPullRequestFiles("kellidavis/ai-code-review-assistant",
                 42);
@@ -163,6 +170,20 @@ class GitHubWebhookServiceTest {
                 eq("kellidavis/ai-code-review-assistant"), eq(42), contains("## AI Code Review Summary"));
         verify(gitHubPullRequestCommentsClient, never()).updatePullRequestComment(
                 eq("kellidavis/ai-code-review-assistant"), eq(1001L), contains("## AI Code Review Summary"));
+        verify(gitHubPullRequestReviewCommentsClient).postReviewComment(
+                eq("kellidavis/ai-code-review-assistant"),
+                eq(42),
+                eq("abc123def456"),
+                eq("src/main/java/PaymentService.java"),
+                eq(2),
+                contains("Avoid System.out.println"));
+        verify(gitHubPullRequestReviewCommentsClient).postReviewComment(
+                eq("kellidavis/ai-code-review-assistant"),
+                eq(42),
+                eq("abc123def456"),
+                eq("src/main/java/OrderService.java"),
+                eq(2),
+                contains("Possible hardcoded secret"));
     }
 
     @Test
@@ -213,8 +234,10 @@ class GitHubWebhookServiceTest {
         assertThat(response.summaryCommentUrl())
                 .isEqualTo("https://github.com/kellidavis/ai-code-review-assistant/pull/42#issuecomment-1001");
         assertThat(response.totalFindings()).isEqualTo(1);
+        assertThat(response.inlineCommentsPosted()).isEqualTo(1);
+        assertThat(response.inlineCommentsFailed()).isZero();
         assertThat(response.message())
-                .isEqualTo("Pull request event accepted and 1 file(s) were prepared from 1 changed file(s). 0 file(s) were skipped. 1 file(s) were analyzed and 1 review finding(s) were generated. A summary comment was updated on the pull request.");
+                .isEqualTo("Pull request event accepted and 1 file(s) were prepared from 1 changed file(s). 0 file(s) were skipped. 1 file(s) were analyzed and 1 review finding(s) were generated. 1 inline review comment(s) were posted. A summary comment was updated on the pull request.");
 
         verify(gitHubPullRequestCommentsClient).listPullRequestComments(
                 "kellidavis/ai-code-review-assistant",
@@ -227,6 +250,13 @@ class GitHubWebhookServiceTest {
                 eq("kellidavis/ai-code-review-assistant"),
                 eq(42),
                 contains("## AI Code Review Summary"));
+        verify(gitHubPullRequestReviewCommentsClient).postReviewComment(
+                eq("kellidavis/ai-code-review-assistant"),
+                eq(42),
+                eq("abc123def456"),
+                eq("src/main/java/PaymentService.java"),
+                eq(2),
+                contains("Avoid System.out.println"));
     }
 
     @Test
@@ -263,8 +293,88 @@ class GitHubWebhookServiceTest {
         assertThat(response.summaryCommentPosted()).isFalse();
         assertThat(response.summaryCommentUrl()).isNull();
         assertThat(response.totalFindings()).isEqualTo(1);
+        assertThat(response.inlineCommentsPosted()).isEqualTo(1);
+        assertThat(response.inlineCommentsFailed()).isZero();
         assertThat(response.message())
-                .isEqualTo("Pull request event accepted and 1 file(s) were prepared from 1 changed file(s). 0 file(s) were skipped. 1 file(s) were analyzed and 1 review finding(s) were generated. The summary comment could not be synchronized with the pull request: GitHub API returned 403 while posting a pull request comment for kellidavis/ai-code-review-assistant#42.");
+                .isEqualTo("Pull request event accepted and 1 file(s) were prepared from 1 changed file(s). 0 file(s) were skipped. 1 file(s) were analyzed and 1 review finding(s) were generated. 1 inline review comment(s) were posted. The summary comment could not be synchronized with the pull request: GitHub API returned 403 while posting a pull request comment for kellidavis/ai-code-review-assistant#42.");
+    }
+
+    @Test
+    void handle_whenOneInlineCommentFails_continuesAndReportsPartialFailure() {
+        GitHubPullRequestEvent event = createEvent("opened");
+
+        List<GitHubPullRequestFileResponse> changedFiles = List.of(
+                new GitHubPullRequestFileResponse(
+                        "src/main/java/PaymentService.java",
+                        "modified",
+                        """
+                        @@ -1,4 +1,5 @@
+                         public class PaymentService {
+                        +    System.out.println("Processing payment");
+                         }
+                        """,
+                        3,
+                        1,
+                        4,
+                        null),
+                new GitHubPullRequestFileResponse(
+                        "src/main/java/OrderService.java",
+                        "added",
+                        """
+                        @@ -0,0 +1,3 @@
+                        +public class OrderService {
+                        +    String token = "secret123";
+                        +}
+                        """,
+                        8,
+                        0,
+                        8,
+                        null));
+
+        when(gitHubPullRequestFilesClient.fetchPullRequestFiles(
+                "kellidavis/ai-code-review-assistant", 42)).thenReturn(changedFiles);
+        when(gitHubPullRequestCommentsClient.listPullRequestComments(
+                "kellidavis/ai-code-review-assistant", 42)).thenReturn(List.of());
+        when(gitHubPullRequestCommentsClient.postPullRequestComment(
+                eq("kellidavis/ai-code-review-assistant"), eq(42),
+                contains("## AI Code Review Summary"))).thenReturn(new GitHubPullRequestCommentResponse(
+                9001L,
+                "Summary comment",
+                "https://github.com/kellidavis/ai-code-review-assistant/pull/42#issuecomment-9001"));
+        doThrow(new GitHubApiException(
+                "GitHub API returned 422 while posting a pull request review comment for kellidavis/ai-code-review-assistant#42."))
+                .when(gitHubPullRequestReviewCommentsClient).postReviewComment(
+                        eq("kellidavis/ai-code-review-assistant"),
+                        eq(42),
+                        eq("abc123def456"),
+                        eq("src/main/java/OrderService.java"),
+                        eq(2),
+                        contains("Possible hardcoded secret"));
+
+        GitHubWebhookResponse response = gitHubWebhookService.handle("pull_request", "delivery-123", event);
+
+        assertThat(response.status()).isEqualTo("ACCEPTED");
+        assertThat(response.totalFindings()).isEqualTo(2);
+        assertThat(response.inlineCommentsPosted()).isEqualTo(1);
+        assertThat(response.inlineCommentsFailed()).isEqualTo(1);
+        assertThat(response.summaryCommentPosted()).isTrue();
+        assertThat(response.message()).isEqualTo(
+                "Pull request event accepted and 2 file(s) were prepared from 2 changed file(s). 0 file(s) were skipped. 2 file(s) were analyzed and 2 review finding(s) were generated. 1 inline review comment(s) were posted. 1 inline review comment(s) could not be posted. A summary comment was posted on the pull request.");
+
+        verify(gitHubPullRequestReviewCommentsClient).postReviewComment(
+                eq("kellidavis/ai-code-review-assistant"),
+                eq(42),
+                eq("abc123def456"),
+                eq("src/main/java/PaymentService.java"),
+                eq(2),
+                contains("Avoid System.out.println"));
+        verify(gitHubPullRequestReviewCommentsClient).postReviewComment(
+                eq("kellidavis/ai-code-review-assistant"),
+                eq(42),
+                eq("abc123def456"),
+                eq("src/main/java/OrderService.java"),
+                eq(2),
+                contains("Possible hardcoded secret"));
     }
 
     @Test
@@ -281,12 +391,17 @@ class GitHubWebhookServiceTest {
         assertThat(response.skippedFiles()).isZero();
         assertThat(response.reviewedFiles()).isZero();
         assertThat(response.totalFindings()).isZero();
+        assertThat(response.inlineCommentsPosted()).isZero();
+        assertThat(response.inlineCommentsFailed()).isZero();
         assertThat(response.summaryCommentPosted()).isFalse();
         assertThat(response.summaryCommentUrl()).isNull();
         assertThat(response.findings()).isEmpty();
         assertThat(response.message()).isEqualTo("Pull request action does not require a code review.");
 
-        verifyNoInteractions(gitHubPullRequestFilesClient, gitHubPullRequestCommentsClient);
+        verifyNoInteractions(
+                gitHubPullRequestFilesClient,
+                gitHubPullRequestCommentsClient,
+                gitHubPullRequestReviewCommentsClient);
     }
 
     @Test
@@ -302,17 +417,23 @@ class GitHubWebhookServiceTest {
         assertThat(response.skippedFiles()).isZero();
         assertThat(response.reviewedFiles()).isZero();
         assertThat(response.totalFindings()).isZero();
+        assertThat(response.inlineCommentsPosted()).isZero();
+        assertThat(response.inlineCommentsFailed()).isZero();
         assertThat(response.summaryCommentPosted()).isFalse();
         assertThat(response.summaryCommentUrl()).isNull();
         assertThat(response.findings()).isEmpty();
         assertThat(response.message()).isEqualTo("Webhook event type is not supported.");
 
-        verifyNoInteractions(gitHubPullRequestFilesClient, gitHubPullRequestCommentsClient);
+        verifyNoInteractions(
+                gitHubPullRequestFilesClient,
+                gitHubPullRequestCommentsClient,
+                gitHubPullRequestReviewCommentsClient);
     }
 
     private GitHubPullRequestEvent createEvent(String action) {
         GitHubPullRequest pullRequest = new GitHubPullRequest("Add payment validation",
-                "https://github.com/kellidavis/ai-code-review-assistant/pull/42");
+                "https://github.com/kellidavis/ai-code-review-assistant/pull/42",
+                new GitHubPullRequestHead("abc123def456"));
 
         GitHubRepository repository = new GitHubRepository("kellidavis/ai-code-review-assistant");
 

@@ -59,6 +59,17 @@ public class GitHubPullRequestReviewCommentFormatter {
         return comment.toString();
     }
 
+    public String formatInlineReviewComment(ReviewFinding finding) {
+        return """
+                <!-- ai-code-review-assistant-inline -->
+                **[%s] %s**
+
+                %s
+
+                _Generated automatically by the AI Code Review Assistant._"""
+                .formatted(finding.severity(), finding.category(), finding.message());
+    }
+
     public boolean isSummaryComment(String commentBody) {
         return commentBody != null && commentBody.contains(SUMMARY_COMMENT_MARKER);
     }

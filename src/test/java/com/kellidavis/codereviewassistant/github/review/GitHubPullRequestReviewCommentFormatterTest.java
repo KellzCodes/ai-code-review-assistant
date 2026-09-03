@@ -2,6 +2,7 @@ package com.kellidavis.codereviewassistant.github.review;
 
 import com.kellidavis.codereviewassistant.github.webhook.GitHubPullRequest;
 import com.kellidavis.codereviewassistant.github.webhook.GitHubPullRequestEvent;
+import com.kellidavis.codereviewassistant.github.webhook.GitHubPullRequestHead;
 import com.kellidavis.codereviewassistant.github.webhook.GitHubRepository;
 import com.kellidavis.codereviewassistant.review.ReviewCategory;
 import com.kellidavis.codereviewassistant.review.ReviewFinding;
@@ -161,13 +162,34 @@ class GitHubPullRequestReviewCommentFormatterTest {
         assertThat(formatter.isSummaryComment("## AI Code Review Summary")).isFalse();
     }
 
+    @Test
+    void formatInlineReviewComment_withFinding_returnsMarkdownComment() {
+        ReviewFinding finding = new ReviewFinding(
+                "src/main/java/PaymentService.java",
+                14,
+                ReviewCategory.MAINTAINABILITY,
+                ReviewSeverity.LOW,
+                "Avoid System.out.println in application code. Use a logger instead.");
+
+        String comment = formatter.formatInlineReviewComment(finding);
+
+        assertThat(comment).isEqualTo("""
+                <!-- ai-code-review-assistant-inline -->
+                **[LOW] MAINTAINABILITY**
+
+                Avoid System.out.println in application code. Use a logger instead.
+
+                _Generated automatically by the AI Code Review Assistant._""");
+    }
+
     private GitHubPullRequestEvent createEvent() {
         return new GitHubPullRequestEvent(
                 "opened",
                 42,
                 new GitHubPullRequest(
                         "Add payment validation",
-                        "https://github.com/kellidavis/ai-code-review-assistant/pull/42"),
+                        "https://github.com/kellidavis/ai-code-review-assistant/pull/42",
+                        new GitHubPullRequestHead("abc123def456")),
                 new GitHubRepository("kellidavis/ai-code-review-assistant"));
     }
 }

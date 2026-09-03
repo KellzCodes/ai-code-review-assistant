@@ -4,7 +4,9 @@ import com.kellidavis.codereviewassistant.github.api.GitHubApiException;
 import com.kellidavis.codereviewassistant.github.api.GitHubPullRequestCommentResponse;
 import com.kellidavis.codereviewassistant.github.api.GitHubPullRequestCommentsClient;
 import com.kellidavis.codereviewassistant.github.api.GitHubPullRequestFilesClient;
+import com.kellidavis.codereviewassistant.github.api.GitHubPullRequestReviewCommentsClient;
 import com.kellidavis.codereviewassistant.github.review.*;
+import com.kellidavis.codereviewassistant.review.ReviewFinding;
 import org.springframework.stereotype.Service;
 import java.util.Comparator;
 import java.util.List;
@@ -23,6 +25,7 @@ public class GitHubWebhookService {
     private final GitHubPullRequestPatchExtractor gitHubPullRequestPatchExtractor;
     private final GitHubPullRequestReviewer gitHubPullRequestReviewer;
     private final GitHubPullRequestCommentsClient gitHubPullRequestCommentsClient;
+    private final GitHubPullRequestReviewCommentsClient gitHubPullRequestReviewCommentsClient;
     private final GitHubPullRequestReviewCommentFormatter gitHubPullRequestReviewCommentFormatter;
 
     public GitHubWebhookService(
@@ -31,6 +34,7 @@ public class GitHubWebhookService {
             GitHubPullRequestPatchExtractor gitHubPullRequestPatchExtractor,
             GitHubPullRequestReviewer gitHubPullRequestReviewer,
             GitHubPullRequestCommentsClient gitHubPullRequestCommentsClient,
+            GitHubPullRequestReviewCommentsClient gitHubPullRequestReviewCommentsClient,
             GitHubPullRequestReviewCommentFormatter gitHubPullRequestReviewCommentFormatter) {
 
         this.gitHubPullRequestFilesClient = gitHubPullRequestFilesClient;
@@ -38,6 +42,7 @@ public class GitHubWebhookService {
         this.gitHubPullRequestPatchExtractor = gitHubPullRequestPatchExtractor;
         this.gitHubPullRequestReviewer = gitHubPullRequestReviewer;
         this.gitHubPullRequestCommentsClient = gitHubPullRequestCommentsClient;
+        this.gitHubPullRequestReviewCommentsClient = gitHubPullRequestReviewCommentsClient;
         this.gitHubPullRequestReviewCommentFormatter = gitHubPullRequestReviewCommentFormatter;
     }
 
@@ -50,6 +55,8 @@ public class GitHubWebhookService {
                     event.action(),
                     event.repository().fullName(),
                     event.number(),
+                    0,
+                    0,
                     0,
                     0,
                     0,
@@ -74,6 +81,8 @@ public class GitHubWebhookService {
                     0,
                     0,
                     0,
+                    0,
+                    0,
                     false,
                     null,
                     List.of(),
@@ -91,6 +100,8 @@ public class GitHubWebhookService {
 
         GitHubPullRequestReviewResult reviewResult =
                 gitHubPullRequestReviewer.reviewFiles(extractionResult.reviewableFiles());
+
+        InlineCommentPostingResult inlineCommentPostingResult = postInlineReviewComments(event, reviewResult);
 
         String summaryComment = gitHubPullRequestReviewCommentFormatter.format(
                 event,
@@ -126,10 +137,43 @@ public class GitHubWebhookService {
                 preparationResult.skippedFiles(),
                 reviewResult.reviewedFiles(),
                 reviewResult.totalFindings(),
+                inlineCommentPostingResult.postedComments(),
+                inlineCommentPostingResult.failedComments(),
                 summaryCommentPosted,
                 summaryCommentUrl,
                 reviewResult.findings(),
-                buildAcceptedMessage(preparationResult, reviewResult, summaryCommentPosted, summaryCommentAction, summaryCommentFailureMessage));
+                buildAcceptedMessage(
+                        preparationResult,
+                        reviewResult,
+                        inlineCommentPostingResult,
+                        summaryCommentPosted,
+                        summaryCommentAction,
+                        summaryCommentFailureMessage));
+    }
+
+    private InlineCommentPostingResult postInlineReviewComments(
+            GitHubPullRequestEvent event,
+            GitHubPullRequestReviewResult reviewResult) {
+
+        int postedComments = 0;
+        int failedComments = 0;
+
+        for (ReviewFinding finding : reviewResult.findings()) {
+            try {
+                gitHubPullRequestReviewCommentsClient.postReviewComment(
+                        event.repository().fullName(),
+                        event.number(),
+                        event.pullRequest().head().sha(),
+                        finding.filePath(),
+                        finding.lineNumber(),
+                        gitHubPullRequestReviewCommentFormatter.formatInlineReviewComment(finding));
+                postedComments++;
+            } catch (GitHubApiException ex) {
+                failedComments++;
+            }
+        }
+
+        return new InlineCommentPostingResult(postedComments, failedComments);
     }
 
     private SummaryCommentResult synchronizeSummaryComment(String repositoryFullName, int pullRequestNumber, String summaryComment) {
@@ -171,6 +215,7 @@ public class GitHubWebhookService {
     private String buildAcceptedMessage(
             PullRequestFilePreparationResult preparationResult,
             GitHubPullRequestReviewResult reviewResult,
+            InlineCommentPostingResult inlineCommentPostingResult,
             boolean summaryCommentPosted,
             String summaryCommentAction,
             String summaryCommentFailureMessage) {
@@ -187,6 +232,15 @@ public class GitHubWebhookService {
                 + reviewResult.totalFindings()
                 + " review finding(s) were generated.";
 
+        if (inlineCommentPostingResult.postedComments() > 0) {
+            message += " " + inlineCommentPostingResult.postedComments() + " inline review comment(s) were posted.";
+        }
+
+        if (inlineCommentPostingResult.failedComments() > 0) {
+            message += " " + inlineCommentPostingResult.failedComments()
+                    + " inline review comment(s) could not be posted.";
+        }
+
         if (summaryCommentPosted) {
             return message + " A summary comment was " + summaryCommentAction + " on the pull request.";
         }
@@ -196,5 +250,8 @@ public class GitHubWebhookService {
     }
 
     private record SummaryCommentResult(String htmlUrl, String action) {
+    }
+
+    private record InlineCommentPostingResult(int postedComments, int failedComments) {
     }
 }
