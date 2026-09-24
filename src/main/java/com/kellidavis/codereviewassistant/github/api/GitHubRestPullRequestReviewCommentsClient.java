@@ -2,12 +2,15 @@ package com.kellidavis.codereviewassistant.github.api;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Pattern;
 
 @Component
@@ -17,6 +20,9 @@ public class GitHubRestPullRequestReviewCommentsClient implements GitHubPullRequ
     private static final String GITHUB_API_VERSION = "2022-11-28";
     private static final Pattern REPOSITORY_FULL_NAME_PATTERN = Pattern.compile("^[^/]+/[^/]+$");
     private static final String REVIEW_COMMENT_SIDE = "RIGHT";
+    private static final int PAGE_SIZE = 100;
+    private static final ParameterizedTypeReference<List<GitHubPullRequestReviewCommentResponse>>
+            REVIEW_COMMENT_LIST_TYPE = new ParameterizedTypeReference<>() {};
     private final RestClient restClient;
     private final boolean tokenConfigured;
 
@@ -39,6 +45,31 @@ public class GitHubRestPullRequestReviewCommentsClient implements GitHubPullRequ
         }
 
         this.restClient = builder.build();
+    }
+
+    @Override
+    public List<GitHubPullRequestReviewCommentResponse> listPullRequestReviewComments(
+            String repositoryFullName,
+            int pullRequestNumber
+    ) {
+        requireToken();
+        requirePositivePullRequestNumber(pullRequestNumber);
+
+        RepositoryCoordinates repository = parseRepositoryCoordinates(repositoryFullName);
+        List<GitHubPullRequestReviewCommentResponse> allReviewComments = new ArrayList<>();
+        int page = 1;
+
+        while (true) {
+            List<GitHubPullRequestReviewCommentResponse> pageReviewComments =
+                    fetchReviewCommentPage(repository, pullRequestNumber, page);
+            allReviewComments.addAll(pageReviewComments);
+
+            if (pageReviewComments.size() < PAGE_SIZE) {
+                return List.copyOf(allReviewComments);
+            }
+
+            page++;
+        }
     }
 
     @Override
@@ -91,6 +122,43 @@ public class GitHubRestPullRequestReviewCommentsClient implements GitHubPullRequ
         } catch (RestClientException ex) {
             throw new GitHubApiException(
                     "Failed to post a pull request review comment for "
+                            + repository.fullName()
+                            + "#"
+                            + pullRequestNumber
+                            + ".",
+                    ex);
+        }
+    }
+
+    private List<GitHubPullRequestReviewCommentResponse> fetchReviewCommentPage(
+            RepositoryCoordinates repository,
+            int pullRequestNumber,
+            int page
+    ) {
+        try {
+            List<GitHubPullRequestReviewCommentResponse> response = restClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/repos/{owner}/{repo}/pulls/{pullRequestNumber}/comments")
+                            .queryParam("per_page", PAGE_SIZE)
+                            .queryParam("page", page)
+                            .build(repository.owner(), repository.repo(), pullRequestNumber))
+                    .retrieve()
+                    .body(REVIEW_COMMENT_LIST_TYPE);
+
+            return response == null ? List.of() : List.copyOf(response);
+        } catch (RestClientResponseException ex) {
+            throw new GitHubApiException(
+                    "GitHub API returned "
+                            + ex.getStatusCode().value()
+                            + " while listing pull request review comments for "
+                            + repository.fullName()
+                            + "#"
+                            + pullRequestNumber
+                            + ".",
+                    ex);
+        } catch (RestClientException ex) {
+            throw new GitHubApiException(
+                    "Failed to list pull request review comments for "
                             + repository.fullName()
                             + "#"
                             + pullRequestNumber

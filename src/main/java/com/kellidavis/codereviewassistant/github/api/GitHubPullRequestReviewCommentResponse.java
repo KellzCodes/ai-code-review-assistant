@@ -9,6 +9,8 @@ public record GitHubPullRequestReviewCommentResponse(
         String body,
         @JsonProperty("html_url")
         String htmlUrl,
+        @JsonProperty("commit_id")
+        String commitId,
         String path,
         Integer line
 ) {
