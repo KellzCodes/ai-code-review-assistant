@@ -5,10 +5,12 @@ import com.kellidavis.codereviewassistant.github.api.GitHubPullRequestCommentRes
 import com.kellidavis.codereviewassistant.github.api.GitHubPullRequestCommentsClient;
 import com.kellidavis.codereviewassistant.github.api.GitHubPullRequestFilesClient;
 import com.kellidavis.codereviewassistant.github.api.GitHubPullRequestReviewCommentsClient;
+import com.kellidavis.codereviewassistant.github.api.GitHubPullRequestReviewCommentResponse;
 import com.kellidavis.codereviewassistant.github.review.*;
 import com.kellidavis.codereviewassistant.review.ReviewFinding;
 import org.springframework.stereotype.Service;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -62,6 +64,7 @@ public class GitHubWebhookService {
                     0,
                     0,
                     0,
+                    0,
                     false,
                     null,
                     List.of(),
@@ -76,6 +79,7 @@ public class GitHubWebhookService {
                     event.action(),
                     event.repository().fullName(),
                     event.number(),
+                    0,
                     0,
                     0,
                     0,
@@ -138,6 +142,7 @@ public class GitHubWebhookService {
                 reviewResult.reviewedFiles(),
                 reviewResult.totalFindings(),
                 inlineCommentPostingResult.postedComments(),
+                inlineCommentPostingResult.skippedComments(),
                 inlineCommentPostingResult.failedComments(),
                 summaryCommentPosted,
                 summaryCommentUrl,
@@ -155,25 +160,73 @@ public class GitHubWebhookService {
             GitHubPullRequestEvent event,
             GitHubPullRequestReviewResult reviewResult) {
 
+        if (reviewResult.findings().isEmpty()) {
+            return new InlineCommentPostingResult(0, 0, 0);
+        }
+
+        String repositoryFullName = event.repository().fullName();
+        int pullRequestNumber = event.number();
+        String commitSha = event.pullRequest().head().sha();
+        Set<InlineReviewCommentKey> existingComments = findExistingInlineReviewCommentKeys(
+                gitHubPullRequestReviewCommentsClient.listPullRequestReviewComments(
+                        repositoryFullName,
+                        pullRequestNumber));
+
         int postedComments = 0;
+        int skippedComments = 0;
         int failedComments = 0;
 
         for (ReviewFinding finding : reviewResult.findings()) {
+            String commentBody = gitHubPullRequestReviewCommentFormatter.formatInlineReviewComment(finding);
+            InlineReviewCommentKey commentKey = new InlineReviewCommentKey(
+                    commitSha,
+                    finding.filePath(),
+                    finding.lineNumber(),
+                    commentBody);
+
+            if (existingComments.contains(commentKey)) {
+                skippedComments++;
+                continue;
+            }
+
             try {
                 gitHubPullRequestReviewCommentsClient.postReviewComment(
-                        event.repository().fullName(),
-                        event.number(),
-                        event.pullRequest().head().sha(),
+                        repositoryFullName,
+                        pullRequestNumber,
+                        commitSha,
                         finding.filePath(),
                         finding.lineNumber(),
-                        gitHubPullRequestReviewCommentFormatter.formatInlineReviewComment(finding));
+                        commentBody);
+                existingComments.add(commentKey);
                 postedComments++;
             } catch (GitHubApiException ex) {
                 failedComments++;
             }
         }
 
-        return new InlineCommentPostingResult(postedComments, failedComments);
+        return new InlineCommentPostingResult(postedComments, skippedComments, failedComments);
+    }
+
+    private Set<InlineReviewCommentKey> findExistingInlineReviewCommentKeys(
+            List<GitHubPullRequestReviewCommentResponse> pullRequestReviewComments) {
+
+        Set<InlineReviewCommentKey> existingComments = new HashSet<>();
+
+        if (pullRequestReviewComments == null || pullRequestReviewComments.isEmpty()) {
+            return existingComments;
+        }
+
+        for (GitHubPullRequestReviewCommentResponse comment : pullRequestReviewComments) {
+            if (comment != null && gitHubPullRequestReviewCommentFormatter.isInlineReviewComment(comment.body())) {
+                existingComments.add(new InlineReviewCommentKey(
+                        comment.commitId(),
+                        comment.path(),
+                        comment.line(),
+                        comment.body()));
+            }
+        }
+
+        return existingComments;
     }
 
     private SummaryCommentResult synchronizeSummaryComment(String repositoryFullName, int pullRequestNumber, String summaryComment) {
@@ -236,6 +289,11 @@ public class GitHubWebhookService {
             message += " " + inlineCommentPostingResult.postedComments() + " inline review comment(s) were posted.";
         }
 
+        if (inlineCommentPostingResult.skippedComments() > 0) {
+            message += " " + inlineCommentPostingResult.skippedComments()
+                    + " duplicate inline review comment(s) were skipped.";
+        }
+
         if (inlineCommentPostingResult.failedComments() > 0) {
             message += " " + inlineCommentPostingResult.failedComments()
                     + " inline review comment(s) could not be posted.";
@@ -252,6 +310,9 @@ public class GitHubWebhookService {
     private record SummaryCommentResult(String htmlUrl, String action) {
     }
 
-    private record InlineCommentPostingResult(int postedComments, int failedComments) {
+    private record InlineCommentPostingResult(int postedComments, int skippedComments, int failedComments) {
+    }
+
+    private record InlineReviewCommentKey(String commitSha, String filePath, Integer lineNumber, String commentBody) {
     }
 }

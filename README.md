@@ -20,7 +20,7 @@ The project is in early development.
 The application currently has two working areas:
 
 1. A REST API for submitting code review requests directly
-2. A GitHub webhook pipeline that validates pull request events, retrieves changed pull request files from GitHub, extracts reviewable added code, analyzes it with the existing review rules, posts mapped inline review comments, and keeps a pull request summary comment in sync on GitHub
+2. A GitHub webhook pipeline that validates pull request events, retrieves changed pull request files from GitHub, extracts reviewable added code, analyzes it with the existing review rules, posts non-duplicate mapped inline review comments, and keeps a pull request summary comment in sync on GitHub
 
 The application does not yet:
 
@@ -60,7 +60,7 @@ The hardcoded-secret rule uses basic pattern matching and is not intended to rep
 - Extraction of added reviewable code from GitHub pull request patches
 - Automatic rule-based analysis of extracted pull request code during supported webhook events
 - Mapping GitHub pull request review findings back to real file line numbers
-- Posting inline review comments on the changed pull request lines on GitHub
+- Posting non-duplicate inline review comments on the changed pull request lines on GitHub
 - Posting and updating pull request review summary comments on GitHub
 - Automated tests for API, webhook, validation, and analysis behavior
 
@@ -205,9 +205,11 @@ For supported GitHub webhook events, the application currently does the followin
 6. Extracts only added reviewable code from each prepared patch
 7. Runs the existing rule-based analyzer against the extracted code
 8. Maps review findings from extracted snippet line numbers back to real pull request file lines
-9. Posts one inline GitHub review comment for each finding on its mapped changed file line
-10. Creates a new pull request review summary comment on GitHub, or updates the existing assistant summary comment if one is already present
-11. Returns an accepted response describing how many files were prepared, analyzed, how many review findings were generated, how many inline comments were posted, and which file lines were flagged
+9. Loads existing inline GitHub review comments for the pull request
+10. Skips an assistant-generated inline comment only when its commit SHA, file path, line number, and complete message already match a finding
+11. Posts one new inline GitHub review comment for each remaining finding on its mapped changed file line
+12. Creates a new pull request review summary comment on GitHub, or updates the existing assistant summary comment if one is already present
+13. Returns an accepted response describing how many files were prepared, analyzed, how many review findings were generated, and how many inline comments were posted, skipped, or failed
 
 ### Pull Request File Preparation
 
@@ -235,7 +237,7 @@ The extracted code is then sent through the existing rule-based `CodeAnalyzer`, 
 - `System.out.println` usage
 - possible hardcoded secrets
 
-The webhook response now returns a pull request review summary with analyzed file counts, total findings, mapped findings that use real file line numbers, inline-comment posting counts, and information about the synchronized GitHub summary comment.
+The webhook response now returns a pull request review summary with analyzed file counts, total findings, mapped findings that use real file line numbers, inline-comment posting, skip, and failure counts, and information about the synchronized GitHub summary comment.
 
 ### Example Accepted Response
 
@@ -253,6 +255,7 @@ The webhook response now returns a pull request review summary with analyzed fil
   "reviewedFiles": 2,
   "totalFindings": 2,
   "inlineCommentsPosted": 2,
+  "inlineCommentsSkipped": 0,
   "inlineCommentsFailed": 0,
   "summaryCommentPosted": true,
   "summaryCommentUrl": "https://github.com/kellidavis/ai-code-review-assistant/pull/42#issuecomment-1",
@@ -294,6 +297,7 @@ Unsupported event types or pull request actions are ignored safely.
   "reviewedFiles": 0,
   "totalFindings": 0,
   "inlineCommentsPosted": 0,
+  "inlineCommentsSkipped": 0,
   "inlineCommentsFailed": 0,
   "summaryCommentPosted": false,
   "summaryCommentUrl": null,

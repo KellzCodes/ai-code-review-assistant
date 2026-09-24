@@ -9,6 +9,7 @@ import java.util.List;
 @Component
 public class GitHubPullRequestReviewCommentFormatter {
     private static final String SUMMARY_COMMENT_MARKER = "<!-- ai-code-review-assistant-summary -->";
+    private static final String INLINE_REVIEW_COMMENT_MARKER = "<!-- ai-code-review-assistant-inline -->";
 
     public String format(GitHubPullRequestEvent event, PullRequestFilePreparationResult preparationResult,
             GitHubPullRequestReviewResult reviewResult) {
@@ -61,17 +62,21 @@ public class GitHubPullRequestReviewCommentFormatter {
 
     public String formatInlineReviewComment(ReviewFinding finding) {
         return """
-                <!-- ai-code-review-assistant-inline -->
+                %s
                 **[%s] %s**
 
                 %s
 
                 _Generated automatically by the AI Code Review Assistant._"""
-                .formatted(finding.severity(), finding.category(), finding.message());
+                .formatted(INLINE_REVIEW_COMMENT_MARKER, finding.severity(), finding.category(), finding.message());
     }
 
     public boolean isSummaryComment(String commentBody) {
         return commentBody != null && commentBody.contains(SUMMARY_COMMENT_MARKER);
+    }
+
+    public boolean isInlineReviewComment(String commentBody) {
+        return commentBody != null && commentBody.contains(INLINE_REVIEW_COMMENT_MARKER);
     }
 
     private int severityRank(ReviewFinding finding) {

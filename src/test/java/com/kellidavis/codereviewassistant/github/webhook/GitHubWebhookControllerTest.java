@@ -91,6 +91,7 @@ class GitHubWebhookControllerTest {
                 2,
                 2,
                 0,
+                0,
                 true,
                 "https://github.com/kellidavis/ai-code-review-assistant/pull/42#issuecomment-1",
                 List.of(
@@ -132,6 +133,7 @@ class GitHubWebhookControllerTest {
                 .andExpect(jsonPath("$.reviewedFiles").value(2))
                 .andExpect(jsonPath("$.totalFindings").value(2))
                 .andExpect(jsonPath("$.inlineCommentsPosted").value(2))
+                .andExpect(jsonPath("$.inlineCommentsSkipped").value(0))
                 .andExpect(jsonPath("$.inlineCommentsFailed").value(0))
                 .andExpect(jsonPath("$.summaryCommentPosted").value(true))
                 .andExpect(jsonPath("$.summaryCommentUrl")

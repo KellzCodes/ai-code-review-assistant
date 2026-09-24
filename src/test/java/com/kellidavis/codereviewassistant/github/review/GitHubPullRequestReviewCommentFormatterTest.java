@@ -163,6 +163,19 @@ class GitHubPullRequestReviewCommentFormatterTest {
     }
 
     @Test
+    void isInlineReviewComment_withMarker_returnsTrue() {
+        assertThat(formatter.isInlineReviewComment("""
+                <!-- ai-code-review-assistant-inline -->
+                **[LOW] MAINTAINABILITY**
+                """)).isTrue();
+    }
+
+    @Test
+    void isInlineReviewComment_withoutMarker_returnsFalse() {
+        assertThat(formatter.isInlineReviewComment("**[LOW] MAINTAINABILITY**")).isFalse();
+    }
+
+    @Test
     void formatInlineReviewComment_withFinding_returnsMarkdownComment() {
         ReviewFinding finding = new ReviewFinding(
                 "src/main/java/PaymentService.java",

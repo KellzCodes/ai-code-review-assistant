@@ -16,6 +16,7 @@ public record GitHubWebhookResponse(
         int reviewedFiles,
         int totalFindings,
         int inlineCommentsPosted,
+        int inlineCommentsSkipped,
         int inlineCommentsFailed,
         boolean summaryCommentPosted,
         String summaryCommentUrl,
